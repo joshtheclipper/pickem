@@ -12,9 +12,11 @@ RUN npm install --omit=dev
 
 COPY . .
 
-# SQLite data lives here - mount a named volume at this path so it
-# survives image rebuilds and container restarts.
-VOLUME /app/db
+# The SQLite data file lives in its own directory, separate from the source
+# code in db/ (see db/db.js) - this is the directory to mount a volume at,
+# NOT /app/db, or you'll mask future code updates with stale volume content.
+RUN mkdir -p /app/data
+VOLUME /app/data
 
 ENV NODE_ENV=production
 EXPOSE 3000

@@ -2,7 +2,17 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'pickem.db');
+// The actual .db file lives in a separate "data" directory from the source
+// code (db.js, schema.sql). This matters for Docker: if the data directory
+// were the same one schema.sql/db.js live in, mounting a volume there would
+// permanently mask any future code updates to those files. Keeping data in
+// its own directory means `docker compose up -d --build` always picks up
+// code changes, while the volume only ever holds the .db file itself.
+const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
+const DB_PATH = process.env.DB_PATH || path.join(DEFAULT_DATA_DIR, 'pickem.db');
+
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+
 const isNew = !fs.existsSync(DB_PATH);
 
 const db = new Database(DB_PATH);

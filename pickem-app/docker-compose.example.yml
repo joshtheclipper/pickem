@@ -22,7 +22,7 @@ services:
       - JWT_SECRET=${PICKEM_JWT_SECRET}   # set this in your top-level .env — see notes below
       - DISABLE_CRON=false
     volumes:
-      - pickem_data:/app/db
+      - pickem_data:/app/data
 
     # ---- VARIANT A: no reverse proxy, just expose a port directly ----
     # Use this if you just want to hit it at http://your-server-ip:3000
