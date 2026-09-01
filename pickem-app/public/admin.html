@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Pick'em Challenge</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="scorebar">
+    <a class="brand" href="/index.html">PICK<span>'</span>EM</a>
+    <nav>
+      <a href="/index.html">Picks</a>
+      <a href="/index.html" id="goBoard">Leaderboard</a>
+      <a href="/admin.html" class="active">Admin</a>
+    </nav>
+    <div class="who">
+      <span id="whoami"></span>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h2 style="margin:26px 0 4px">Set the weekly slate</h2>
+    <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:18px">
+      Pull the schedule from ESPN, choose the 10–15 games for the challenge, and save.
+    </div>
+
+    <div class="tabbar">
+      <button class="league-tab active" data-league="NFL">NFL</button>
+      <button class="league-tab" data-league="NCAAF">NCAAF</button>
+      <div class="week-nav">
+        <button id="weekDown">‹</button>
+        <span id="weekLabel">Week 1</span>
+        <button id="weekUp">›</button>
+      </div>
+    </div>
+
+    <div class="admin-actions" style="margin-bottom:16px">
+      <button class="btn secondary" id="fetchBtn">Fetch games from ESPN</button>
+      <span id="selectedCount" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem"></span>
+    </div>
+
+    <div id="adminMsg"></div>
+    <div id="adminGamesList"></div>
+
+    <div class="admin-actions">
+      <button class="btn" id="saveBtn" style="width:auto" disabled>Save selected games</button>
+    </div>
+
+    <div class="section-label" style="margin-top:40px">Scoring</div>
+    <div class="sync-strip">
+      <span>Scores auto-sync every 15 minutes. You can also trigger it manually.</span>
+      <button class="btn secondary" id="syncBtn">Sync now</button>
+    </div>
+    <div id="syncMsg"></div>
+
+    <div class="section-label">Players</div>
+    <div id="playersList"></div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let league = 'NFL';
+    let week = estimateCurrentWeek();
+    let year = currentSeasonYear();
+    let fetchedGames = []; // games pulled from ESPN, with .selected flag
+
+    async function init() {
+      const user = await requireLogin();
+      if (!user) return;
+      if (!user.is_admin) {
+        window.location.href = '/index.html';
+        return;
+      }
+      document.getElementById('whoami').textContent = user.username;
+      loadPlayers();
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await api.post('/api/auth/logout');
+      window.location.href = '/login.html';
+    });
+
+    document.querySelectorAll('.tabbar .league-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tabbar .league-tab').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        league = btn.dataset.league;
+        weekLabel();
+        clearList();
+      });
+    });
+    document.getElementById('weekUp').addEventListener('click', () => { week++; weekLabel(); clearList(); });
+    document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; weekLabel(); clearList(); } });
+    function weekLabel() { document.getElementById('weekLabel').textContent = `Week ${week}`; }
+    function clearList() {
+      fetchedGames = [];
+      document.getElementById('adminGamesList').innerHTML = '';
+      document.getElementById('saveBtn').disabled = true;
+      updateCount();
+    }
+
+    document.getElementById('fetchBtn').addEventListener('click', async () => {
+      const list = document.getElementById('adminGamesList');
+      const msg = document.getElementById('adminMsg');
+      msg.innerHTML = '';
+      list.innerHTML = '<div class="empty">Fetching…</div>';
+      try {
+        const { games } = await api.get(`/api/admin/fetch-games?league=${league}&week=${week}&year=${year}`);
+        fetchedGames = games.map((g) => ({ ...g, selected: g.included }));
+        renderAdminGames();
+        document.getElementById('saveBtn').disabled = false;
+      } catch (err) {
+        list.innerHTML = '';
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    });
+
+    function renderAdminGames() {
+      const list = document.getElementById('adminGamesList');
+      if (fetchedGames.length === 0) {
+        list.innerHTML = '<div class="empty">No games found from ESPN for this week yet.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      fetchedGames.forEach((g, idx) => {
+        const kickoff = new Date(g.start_time);
+        const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const row = document.createElement('div');
+        row.className = 'admin-list-item';
+        row.innerHTML = `
+          <label>
+            <input type="checkbox" ${g.selected ? 'checked' : ''} data-idx="${idx}">
+            <span>${g.away_team_abbr} @ ${g.home_team_abbr} — <span style="color:var(--chalk-dim)">${timeStr}</span></span>
+          </label>
+          ${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}
+        `;
+        row.querySelector('input').addEventListener('change', (e) => {
+          fetchedGames[idx].selected = e.target.checked;
+          updateCount();
+        });
+        list.appendChild(row);
+      });
+      updateCount();
+    }
+
+    function updateCount() {
+      const n = fetchedGames.filter((g) => g.selected).length;
+      document.getElementById('selectedCount').textContent = n ? `${n} selected` : '';
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('adminMsg');
+      const chosen = fetchedGames.filter((g) => g.selected);
+      if (chosen.length === 0) {
+        msg.innerHTML = '<div class="error-msg">Select at least one game.</div>';
+        return;
+      }
+      try {
+        await api.post('/api/admin/select-games', { games: chosen });
+        msg.innerHTML = `<div class="ok-msg">Saved ${chosen.length} games for ${league} Week ${week}.</div>`;
+      } catch (err) {
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    });
+
+    document.getElementById('syncBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('syncMsg');
+      msg.innerHTML = '<div class="empty" style="padding:10px">Syncing…</div>';
+      try {
+        const result = await api.post('/api/admin/sync');
+        msg.innerHTML = `<div class="ok-msg">Synced: ${result.updatedGames} game updates, ${result.gradedPicks} picks graded.</div>`;
+      } catch (err) {
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    });
+
+    async function loadPlayers() {
+      const list = document.getElementById('playersList');
+      try {
+        const { users } = await api.get('/api/admin/users');
+        list.innerHTML = '';
+        users.forEach((u) => {
+          const row = document.createElement('div');
+          row.className = 'admin-list-item';
+          row.innerHTML = `<span>${u.username} ${u.is_admin ? '<span class="pill saved">admin</span>' : ''}</span>`;
+          list.appendChild(row);
+        });
+      } catch (err) {
+        list.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    weekLabel();
+    init();
+  </script>
+</body>
+</html>

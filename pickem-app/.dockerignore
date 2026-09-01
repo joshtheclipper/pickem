@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+.env
+db/pickem.db
+db/pickem.db-shm
+db/pickem.db-wal
+.git
+.gitignore
+*.log

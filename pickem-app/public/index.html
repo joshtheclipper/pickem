@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick'em Challenge</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="scorebar">
+    <a class="brand" href="/index.html">PICK<span>'</span>EM</a>
+    <nav>
+      <a href="#" id="tabPicks" class="active">Picks</a>
+      <a href="#" id="tabBoard">Leaderboard</a>
+      <a href="/admin.html" id="tabAdmin" style="display:none">Admin</a>
+    </nav>
+    <div class="who">
+      <span id="whoami"></span>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- PICKS VIEW -->
+    <div id="picksView">
+      <div class="tabbar">
+        <button class="league-tab active" data-league="NFL">NFL</button>
+        <button class="league-tab" data-league="NCAAF">NCAAF</button>
+        <div class="week-nav">
+          <button id="weekDown">‹</button>
+          <span id="weekLabel">Week 1</span>
+          <button id="weekUp">›</button>
+        </div>
+      </div>
+      <div id="picksMsg"></div>
+      <div id="gamesList"></div>
+    </div>
+
+    <!-- LEADERBOARD VIEW -->
+    <div id="boardView" style="display:none">
+      <div class="tabbar">
+        <button class="league-tab active" data-scope="overall">Overall</button>
+        <button class="league-tab" data-scope="NFL">NFL</button>
+        <button class="league-tab" data-scope="NCAAF">NCAAF</button>
+      </div>
+      <div id="boardList" style="margin-top:20px"></div>
+    </div>
+
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let league = 'NFL';
+    let week = estimateCurrentWeek();
+    let year = currentSeasonYear();
+    let boardScope = 'overall';
+
+    const gamesList = document.getElementById('gamesList');
+    const weekLabel = document.getElementById('weekLabel');
+    const picksMsg = document.getElementById('picksMsg');
+
+    async function init() {
+      const user = await requireLogin();
+      if (!user) return;
+      document.getElementById('whoami').textContent = user.username;
+      if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
+      loadGames();
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await api.post('/api/auth/logout');
+      window.location.href = '/login.html';
+    });
+
+    // Tab switching
+    document.getElementById('tabPicks').addEventListener('click', (e) => {
+      e.preventDefault();
+      show('picks');
+    });
+    document.getElementById('tabBoard').addEventListener('click', (e) => {
+      e.preventDefault();
+      show('board');
+      loadBoard();
+    });
+    function show(which) {
+      document.getElementById('picksView').style.display = which === 'picks' ? '' : 'none';
+      document.getElementById('boardView').style.display = which === 'board' ? '' : 'none';
+      document.getElementById('tabPicks').classList.toggle('active', which === 'picks');
+      document.getElementById('tabBoard').classList.toggle('active', which === 'board');
+    }
+
+    // League tabs (picks view)
+    document.querySelectorAll('#picksView .league-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#picksView .league-tab').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        league = btn.dataset.league;
+        loadGames();
+      });
+    });
+
+    document.getElementById('weekUp').addEventListener('click', () => { week++; loadGames(); });
+    document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; loadGames(); } });
+
+    async function loadGames() {
+      weekLabel.textContent = `Week ${week}`;
+      gamesList.innerHTML = '<div class="empty">Loading…</div>';
+      picksMsg.innerHTML = '';
+      try {
+        const { games } = await api.get(`/api/games?league=${league}&week=${week}&year=${year}`);
+        if (games.length === 0) {
+          gamesList.innerHTML = `<div class="empty">No games selected yet for ${league} Week ${week}.<br>Check back once the admin sets the slate.</div>`;
+          return;
+        }
+        gamesList.innerHTML = '';
+        games.forEach((g) => gamesList.appendChild(renderGame(g)));
+      } catch (err) {
+        gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    function renderGame(g) {
+      const div = document.createElement('div');
+      div.className = 'game';
+      if (g.my_pick_correct === 1) div.classList.add('graded-correct');
+      if (g.my_pick_correct === 0) div.classList.add('graded-incorrect');
+
+      const kickoff = new Date(g.start_time);
+      const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+      const statusText = g.status === 'final'
+        ? `<span class="status-final">FINAL</span>`
+        : (g.locked ? `<span class="lock">🔒 Locked</span>` : `<span class="lock">Picks open</span>`);
+
+      div.innerHTML = `
+        <div class="game-meta">
+          <span>${timeStr}</span>
+          <span>${statusText}</span>
+        </div>
+        <div class="matchup">
+          <button class="team-btn away-btn ${g.my_pick === 'away' ? 'picked' : ''}" ${g.locked ? 'disabled' : ''}>
+            ${g.away_team_logo ? `<img src="${g.away_team_logo}" alt="">` : ''}
+            <span class="abbr">${g.away_team_abbr || g.away_team}</span>
+            ${g.away_score !== null ? `<span class="score">${g.away_score}</span>` : ''}
+          </button>
+          <span class="at-sign">@</span>
+          <button class="team-btn right-side home-btn ${g.my_pick === 'home' ? 'picked' : ''}" ${g.locked ? 'disabled' : ''}>
+            ${g.home_team_logo ? `<img src="${g.home_team_logo}" alt="">` : ''}
+            <span class="abbr">${g.home_team_abbr || g.home_team}</span>
+            ${g.home_score !== null ? `<span class="score">${g.home_score}</span>` : ''}
+          </button>
+        </div>
+      `;
+
+      const awayBtn = div.querySelector('.away-btn');
+      const homeBtn = div.querySelector('.home-btn');
+      if (!g.locked) {
+        awayBtn.addEventListener('click', () => makePick(g.id, 'away'));
+        homeBtn.addEventListener('click', () => makePick(g.id, 'home'));
+      }
+      return div;
+    }
+
+    async function makePick(gameId, pick) {
+      try {
+        await api.post('/api/picks', { game_id: gameId, pick });
+        loadGames();
+      } catch (err) {
+        picksMsg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    // Leaderboard
+    document.querySelectorAll('#boardView .league-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#boardView .league-tab').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        boardScope = btn.dataset.scope;
+        loadBoard();
+      });
+    });
+
+    async function loadBoard() {
+      const boardList = document.getElementById('boardList');
+      boardList.innerHTML = '<div class="empty">Loading…</div>';
+      const qs = boardScope === 'overall' ? '' : `?league=${boardScope}`;
+      try {
+        const { leaderboard } = await api.get(`/api/leaderboard${qs}`);
+        if (leaderboard.length === 0) {
+          boardList.innerHTML = '<div class="empty">No players yet.</div>';
+          return;
+        }
+        boardList.innerHTML = '';
+        leaderboard.forEach((row, i) => {
+          const div = document.createElement('div');
+          div.className = 'board-row';
+          div.innerHTML = `
+            <div class="rank">${i + 1}</div>
+            <div>
+              <div class="name">${row.username}</div>
+              <div class="sub">${row.graded_picks} graded picks</div>
+            </div>
+            <div class="pts">${row.correct_picks}<small>correct</small></div>
+          `;
+          boardList.appendChild(div);
+        });
+      } catch (err) {
+        boardList.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

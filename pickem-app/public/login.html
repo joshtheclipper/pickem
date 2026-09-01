@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick'em Challenge — Sign in</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="auth-card">
+    <h1>PICK<span style="color:var(--gold)">'</span>EM</h1>
+    <div class="tagline">NFL &amp; NCAAF weekly challenge</div>
+
+    <div id="msg"></div>
+
+    <form id="form">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" autocomplete="username" required maxlength="30">
+      </div>
+      <div class="field">
+        <label for="pin">PIN</label>
+        <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4">
+      </div>
+      <button class="btn" type="submit" id="submitBtn">Sign in</button>
+    </form>
+
+    <div class="switcher">
+      <span id="switchText">New here?</span>
+      <a id="switchLink" href="#">Create an account</a>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let mode = 'login';
+    const form = document.getElementById('form');
+    const msg = document.getElementById('msg');
+    const submitBtn = document.getElementById('submitBtn');
+    const switchLink = document.getElementById('switchLink');
+    const switchText = document.getElementById('switchText');
+
+    switchLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      mode = mode === 'login' ? 'register' : 'login';
+      submitBtn.textContent = mode === 'login' ? 'Sign in' : 'Create account';
+      switchText.textContent = mode === 'login' ? 'New here?' : 'Already playing?';
+      switchLink.textContent = mode === 'login' ? 'Create an account' : 'Sign in';
+      msg.innerHTML = '';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      const username = document.getElementById('username').value.trim();
+      const pin = document.getElementById('pin').value;
+      submitBtn.disabled = true;
+      try {
+        const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+        await api.post(endpoint, { username, pin });
+        window.location.href = '/index.html';
+      } catch (err) {
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // If already logged in, skip straight to the app.
+    api.get('/api/auth/me').then(() => { window.location.href = '/index.html'; }).catch(() => {});
+  </script>
+</body>
+</html>

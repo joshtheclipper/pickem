@@ -1,0 +1,20 @@
+services:
+  pickem:
+    build: ./pickem-app          # path to this project's folder on your host
+    container_name: pickem
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - JWT_SECRET=${PICKEM_JWT_SECRET}   # set this in your top-level .env — see notes below
+      - DISABLE_CRON=false
+    volumes:
+      - pickem_data:/app/db
+    networks:
+       - proxy      # the external network your Traefik container is attached to
+
+volumes:
+  pickem_data:       # add this line into your existing top-level `volumes:` block
+
+networks:
+  proxy:
+    external: true

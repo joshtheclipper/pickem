@@ -1,0 +1,66 @@
+# Example service definition for pickem — merge this into your existing
+# docker-compose.yml (the one that already has your other containers).
+# Don't run this as a separate compose project unless you want pickem
+# fully isolated from your other services' network.
+#
+# Steps:
+#   1. Copy the `pickem:` service block below into your existing compose
+#      file's `services:` section.
+#   2. Pick ONE of the reverse-proxy variants (A, B, C) that matches your
+#      setup, and delete the other two.
+#   3. Add the `pickem_data:` line into your existing `volumes:` section.
+#   4. If you're using Traefik or nginx-proxy, make sure `pickem` joins
+#      the same external network your proxy already uses (see notes below).
+
+services:
+  pickem:
+    build: ./pickem-app          # path to this project's folder on your host
+    container_name: pickem
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - JWT_SECRET=${PICKEM_JWT_SECRET}   # set this in your top-level .env — see notes below
+      - DISABLE_CRON=false
+    volumes:
+      - pickem_data:/app/db
+
+    # ---- VARIANT A: no reverse proxy, just expose a port directly ----
+    # Use this if you just want to hit it at http://your-server-ip:3000
+    ports:
+      - "3000:3000"
+
+    # ---- VARIANT B: Traefik ----
+    # Delete the `ports:` line above if using this, Traefik talks to the
+    # container over the internal Docker network instead.
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.pickem.rule=Host(`pickem.yourdomain.com`)"
+    #   - "traefik.http.routers.pickem.entrypoints=websecure"
+    #   - "traefik.http.routers.pickem.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.pickem.loadbalancer.server.port=3000"
+    # networks:
+    #   - proxy      # the external network your Traefik container is attached to
+    #   - default
+
+    # ---- VARIANT C: nginx-proxy + acme-companion ----
+    # Delete the `ports:` line above if using this too.
+    # environment:
+    #   - PORT=3000
+    #   - JWT_SECRET=${PICKEM_JWT_SECRET}
+    #   - VIRTUAL_HOST=pickem.yourdomain.com
+    #   - VIRTUAL_PORT=3000
+    #   - LETSENCRYPT_HOST=pickem.yourdomain.com
+    #   - LETSENCRYPT_EMAIL=you@yourdomain.com
+    # networks:
+    #   - proxy
+    #   - default
+
+volumes:
+  pickem_data:       # add this line into your existing top-level `volumes:` block
+
+# Only needed for Variant B/C — declare the proxy network as external
+# so compose doesn't try to create a new one. Skip this if you're on
+# Variant A, or if your existing compose file already declares it.
+# networks:
+#   proxy:
+#     external: true
