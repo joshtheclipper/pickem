@@ -183,6 +183,69 @@ a { color: var(--gold-bright); }
 
 .status-final { color: var(--gold-bright); font-weight: 600; }
 
+/* --- Prop questions --- */
+.prop {
+  background: var(--charcoal);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.prop.graded-correct { border-left-color: var(--gold); }
+.prop.graded-incorrect { border-left-color: var(--loss-red); }
+.prop-question { font-size: 0.95rem; margin-bottom: 10px; line-height: 1.4; }
+.prop-choices { display: flex; gap: 8px; }
+.prop-btn {
+  flex: 1;
+  background: rgba(0,0,0,0.15);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: var(--radius);
+  padding: 9px;
+  cursor: pointer;
+  font-family: 'Teko', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.03em;
+}
+.prop-btn:hover:not(:disabled) { border-color: var(--gold); }
+.prop-btn:disabled { cursor: default; opacity: 0.75; }
+.prop-btn.picked { background: var(--gold); color: var(--turf-dark); border-color: var(--gold); font-weight: 700; }
+.prop-status { font-size: 0.7rem; color: var(--chalk-dim); margin-bottom: 8px; }
+
+/* --- Admin prop composer --- */
+.prop-form {
+  background: var(--charcoal);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 20px;
+}
+.prop-form textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  background: var(--turf-dark);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+.admin-prop-item {
+  background: var(--turf);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.admin-prop-item .q { font-size: 0.88rem; margin-bottom: 8px; }
+.admin-prop-item .grade-row { display: flex; gap: 8px; align-items: center; }
+.admin-prop-item .grade-row button { font-size: 0.78rem; padding: 5px 10px; }
+.admin-prop-item .graded-tag { font-size: 0.75rem; color: var(--gold-bright); }
+
 /* --- Leaderboard --- */
 .board-row {
   display: grid;

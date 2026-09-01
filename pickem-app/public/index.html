@@ -34,6 +34,7 @@
         </div>
       </div>
       <div id="picksMsg"></div>
+      <div id="propsList"></div>
       <div id="gamesList"></div>
     </div>
 
@@ -107,6 +108,7 @@
       weekLabel.textContent = `Week ${week}`;
       gamesList.innerHTML = '<div class="empty">Loading…</div>';
       picksMsg.innerHTML = '';
+      loadProps();
       try {
         const { games } = await api.get(`/api/games?league=${league}&week=${week}&year=${year}`);
         if (games.length === 0) {
@@ -117,6 +119,65 @@
         games.forEach((g) => gamesList.appendChild(renderGame(g)));
       } catch (err) {
         gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    const propsList = document.getElementById('propsList');
+
+    async function loadProps() {
+      propsList.innerHTML = '';
+      try {
+        const { props } = await api.get(`/api/props?league=${league}&week=${week}&year=${year}`);
+        props.forEach((p) => propsList.appendChild(renderProp(p)));
+      } catch (err) {
+        // Non-fatal — just skip the props section if something goes wrong.
+      }
+    }
+
+    function renderProp(p) {
+      const div = document.createElement('div');
+      div.className = 'prop';
+      if (p.my_answer_correct === 1) div.classList.add('graded-correct');
+      if (p.my_answer_correct === 0) div.classList.add('graded-incorrect');
+
+      const statusText = p.status === 'closed'
+        ? `<span class="status-final">GRADED — ${p.correct_answer.toUpperCase()}</span>`
+        : (p.locked ? '🔒 Locked' : 'Prop pick — Yes/No');
+
+      div.innerHTML = `
+        <div class="prop-status">${statusText}</div>
+        <div class="prop-question">${p.question}</div>
+        <div class="prop-choices">
+          <button class="prop-btn yes-btn ${p.my_answer === 'yes' ? 'picked' : ''}" ${p.locked ? 'disabled' : ''}>YES</button>
+          <button class="prop-btn no-btn ${p.my_answer === 'no' ? 'picked' : ''}" ${p.locked ? 'disabled' : ''}>NO</button>
+        </div>
+      `;
+
+      const yesBtn = div.querySelector('.yes-btn');
+      const noBtn = div.querySelector('.no-btn');
+      if (!p.locked) {
+        yesBtn.addEventListener('click', () => makePropPick(p.id, 'yes', div));
+        noBtn.addEventListener('click', () => makePropPick(p.id, 'no', div));
+      }
+      return div;
+    }
+
+    async function makePropPick(propId, answer, rowEl) {
+      const yesBtn = rowEl.querySelector('.yes-btn');
+      const noBtn = rowEl.querySelector('.no-btn');
+      const prevYes = yesBtn.classList.contains('picked');
+      const prevNo = noBtn.classList.contains('picked');
+
+      yesBtn.classList.toggle('picked', answer === 'yes');
+      noBtn.classList.toggle('picked', answer === 'no');
+      picksMsg.innerHTML = '';
+
+      try {
+        await api.post('/api/props/pick', { prop_id: propId, answer });
+      } catch (err) {
+        yesBtn.classList.toggle('picked', prevYes);
+        noBtn.classList.toggle('picked', prevNo);
+        picksMsg.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
     }
 
@@ -153,20 +214,34 @@
         </div>
       `;
 
+      div.dataset.gameId = g.id;
       const awayBtn = div.querySelector('.away-btn');
       const homeBtn = div.querySelector('.home-btn');
       if (!g.locked) {
-        awayBtn.addEventListener('click', () => makePick(g.id, 'away'));
-        homeBtn.addEventListener('click', () => makePick(g.id, 'home'));
+        awayBtn.addEventListener('click', () => makePick(g.id, 'away', div));
+        homeBtn.addEventListener('click', () => makePick(g.id, 'home', div));
       }
       return div;
     }
 
-    async function makePick(gameId, pick) {
+    // Optimistically updates just the one game row instead of reloading the
+    // whole list, so picking doesn't cause a visible full-screen refresh.
+    async function makePick(gameId, pick, rowEl) {
+      const awayBtn = rowEl.querySelector('.away-btn');
+      const homeBtn = rowEl.querySelector('.home-btn');
+      const prevAway = awayBtn.classList.contains('picked');
+      const prevHome = homeBtn.classList.contains('picked');
+
+      awayBtn.classList.toggle('picked', pick === 'away');
+      homeBtn.classList.toggle('picked', pick === 'home');
+      picksMsg.innerHTML = '';
+
       try {
         await api.post('/api/picks', { game_id: gameId, pick });
-        loadGames();
       } catch (err) {
+        // revert the optimistic change on failure
+        awayBtn.classList.toggle('picked', prevAway);
+        homeBtn.classList.toggle('picked', prevHome);
         picksMsg.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
     }

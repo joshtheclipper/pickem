@@ -103,6 +103,70 @@ router.post('/sync', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/props  { league, week, season_year, question, locks_at? }
+// Create a free-text yes/no prop question for a given league/week.
+router.post('/props', requireAdmin, (req, res) => {
+  const { league, week, season_year, question, locks_at } = req.body || {};
+  if (!league || !week || !season_year || !question || !String(question).trim()) {
+    return res.status(400).json({ error: 'league, week, season_year, and question are required' });
+  }
+  const info = db
+    .prepare(
+      'INSERT INTO props (league, season_year, week, question, locks_at) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(league, season_year, week, String(question).trim(), locks_at || null);
+  res.json({ ok: true, id: info.lastInsertRowid });
+});
+
+// GET /api/admin/props?league=&week=&year= - list props for a week (admin view, includes closed ones)
+router.get('/props', requireAdmin, (req, res) => {
+  const { league, week, year } = req.query;
+  if (!league || !week || !year) {
+    return res.status(400).json({ error: 'league, week, and year are required' });
+  }
+  const props = db
+    .prepare(
+      'SELECT * FROM props WHERE league = ? AND week = ? AND season_year = ? AND included = 1 ORDER BY created_at ASC'
+    )
+    .all(league, week, year);
+  res.json({ props });
+});
+
+// POST /api/admin/props/grade  { id, correct_answer: 'yes'|'no' }
+// Grades every pick submitted on this prop and closes it.
+router.post('/props/grade', requireAdmin, (req, res) => {
+  const { id, correct_answer } = req.body || {};
+  if (!id || !['yes', 'no'].includes(correct_answer)) {
+    return res.status(400).json({ error: "id and correct_answer ('yes'|'no') are required" });
+  }
+  const prop = db.prepare('SELECT * FROM props WHERE id = ?').get(id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE props SET status = 'closed', correct_answer = ? WHERE id = ?").run(correct_answer, id);
+    const picks = db.prepare('SELECT id, answer FROM prop_picks WHERE prop_id = ?').all(id);
+    for (const p of picks) {
+      const isCorrect = p.answer === correct_answer ? 1 : 0;
+      db.prepare("UPDATE prop_picks SET is_correct = ?, updated_at = datetime('now') WHERE id = ?").run(isCorrect, p.id);
+    }
+  });
+  tx();
+
+  res.json({ ok: true });
+});
+
+// POST /api/admin/props/remove { id } - hide a prop (only if no one has picked it yet)
+router.post('/props/remove', requireAdmin, (req, res) => {
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  const pickCount = db.prepare('SELECT COUNT(*) AS c FROM prop_picks WHERE prop_id = ?').get(id).c;
+  if (pickCount > 0) {
+    return res.status(400).json({ error: 'Cannot remove a prop that already has picks on it — grade it instead' });
+  }
+  db.prepare('UPDATE props SET included = 0 WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
 // GET /api/admin/users - list all players
 router.get('/users', requireAdmin, (req, res) => {
   const users = db.prepare('SELECT id, username, is_admin, created_at FROM users ORDER BY username').all();

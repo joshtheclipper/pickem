@@ -48,6 +48,18 @@
       <button class="btn" id="saveBtn" style="width:auto" disabled>Save selected games</button>
     </div>
 
+    <div class="section-label" style="margin-top:40px">Prop questions — <span id="propsSectionLabel">NFL Week 1</span></div>
+    <div class="prop-form">
+      <textarea id="propQuestion" placeholder="e.g. Will there be a game-winning score in the final 2 minutes this week?"></textarea>
+      <div class="field" style="max-width:280px">
+        <label for="propLockTime">Locks at (optional)</label>
+        <input type="datetime-local" id="propLockTime">
+      </div>
+      <button class="btn secondary" id="addPropBtn" style="width:auto">Add prop question</button>
+    </div>
+    <div id="propsMsg"></div>
+    <div id="adminPropsList"></div>
+
     <div class="section-label" style="margin-top:40px">Scoring</div>
     <div class="sync-strip">
       <span>Scores auto-sync every 15 minutes. You can also trigger it manually.</span>
@@ -75,6 +87,7 @@
       }
       document.getElementById('whoami').textContent = user.username;
       loadPlayers();
+      loadAdminProps();
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -89,16 +102,88 @@
         league = btn.dataset.league;
         weekLabel();
         clearList();
+        loadAdminProps();
       });
     });
-    document.getElementById('weekUp').addEventListener('click', () => { week++; weekLabel(); clearList(); });
-    document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; weekLabel(); clearList(); } });
-    function weekLabel() { document.getElementById('weekLabel').textContent = `Week ${week}`; }
+    document.getElementById('weekUp').addEventListener('click', () => { week++; weekLabel(); clearList(); loadAdminProps(); });
+    document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; weekLabel(); clearList(); loadAdminProps(); } });
+    function weekLabel() {
+      document.getElementById('weekLabel').textContent = `Week ${week}`;
+      document.getElementById('propsSectionLabel').textContent = `${league} Week ${week}`;
+    }
     function clearList() {
       fetchedGames = [];
       document.getElementById('adminGamesList').innerHTML = '';
       document.getElementById('saveBtn').disabled = true;
       updateCount();
+    }
+
+    // --- Prop questions ---
+    document.getElementById('addPropBtn').addEventListener('click', async () => {
+      const question = document.getElementById('propQuestion').value.trim();
+      const lockInput = document.getElementById('propLockTime').value;
+      const msg = document.getElementById('propsMsg');
+      if (!question) {
+        msg.innerHTML = '<div class="error-msg">Enter a question first.</div>';
+        return;
+      }
+      const locks_at = lockInput ? new Date(lockInput).toISOString() : null;
+      try {
+        await api.post('/api/admin/props', { league, week, season_year: year, question, locks_at });
+        document.getElementById('propQuestion').value = '';
+        document.getElementById('propLockTime').value = '';
+        msg.innerHTML = '<div class="ok-msg">Prop question added.</div>';
+        loadAdminProps();
+      } catch (err) {
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    });
+
+    async function loadAdminProps() {
+      const list = document.getElementById('adminPropsList');
+      list.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const { props } = await api.get(`/api/admin/props?league=${league}&week=${week}&year=${year}`);
+        if (props.length === 0) {
+          list.innerHTML = '<div class="empty">No prop questions yet for this week.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        props.forEach((p) => list.appendChild(renderAdminProp(p)));
+      } catch (err) {
+        list.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    function renderAdminProp(p) {
+      const div = document.createElement('div');
+      div.className = 'admin-prop-item';
+      if (p.status === 'closed') {
+        div.innerHTML = `
+          <div class="q">${p.question}</div>
+          <span class="graded-tag">Graded — correct answer: ${p.correct_answer.toUpperCase()}</span>
+        `;
+      } else {
+        div.innerHTML = `
+          <div class="q">${p.question}</div>
+          <div class="grade-row">
+            <span style="font-size:0.78rem;color:var(--chalk-dim)">Grade:</span>
+            <button class="btn secondary" data-answer="yes" style="width:auto">Correct = YES</button>
+            <button class="btn secondary" data-answer="no" style="width:auto">Correct = NO</button>
+          </div>
+        `;
+        div.querySelectorAll('button[data-answer]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            try {
+              await api.post('/api/admin/props/grade', { id: p.id, correct_answer: btn.dataset.answer });
+              loadAdminProps();
+            } catch (err) {
+              document.getElementById('propsMsg').innerHTML = `<div class="error-msg">${err.message}</div>`;
+            }
+          });
+        });
+      }
+      return div;
     }
 
     document.getElementById('fetchBtn').addEventListener('click', async () => {

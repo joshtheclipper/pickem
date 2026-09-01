@@ -148,6 +148,78 @@ future changes is just replacing the `pickem-app` folder's contents and re-runni
 `docker compose up -d --build pickem`. Your data isn't affected — it lives in the `pickem_data`
 volume, separate from the image.
 
+## Making changes safely once it's live
+
+The safest workflow is: **put the project under git, back up the database before any change,
+apply changes on top of your running folder, rebuild, and keep the old image around until you've
+confirmed the new one works.**
+
+**1. Put it under version control (one-time setup).** From inside the `pickem-app` folder on your
+server:
+
+```bash
+git init
+git add .
+git commit -m "Working baseline"
+```
+
+Now every future change is a diff you can review or revert — `git diff` shows exactly what
+changed before you rebuild, and `git checkout -- .` throws away changes you don't want.
+
+**2. Back up the database before any update** (schema changes especially):
+
+```bash
+docker compose exec pickem sh -c "cp /app/db/pickem.db /app/db/pickem-backup-$(date +%F).db"
+```
+
+That backup lives inside the volume, so also copy it out to the host occasionally:
+
+```bash
+docker cp pickem:/app/db/pickem-backup-YYYY-MM-DD.db ./backups/
+```
+
+**3. Apply the update.** Copy new/changed files into the `pickem-app` folder (overwriting what's
+there), or `git apply` a diff, or pull from wherever you're tracking it.
+
+**4. Know whether the change is "safe" before rebuilding:**
+- **New files, new routes, new tables in `schema.sql` (using `CREATE TABLE IF NOT EXISTS`)** —
+  safe. Existing tables and data are untouched; the app just gains new capability on next start.
+- **Changing an *existing* table's columns** — not automatically safe. SQLite's
+  `CREATE TABLE IF NOT EXISTS` won't alter a table that already exists, so a schema edit like
+  "add a column to `games`" silently does nothing on restart. That needs an explicit one-time
+  migration (an `ALTER TABLE ... ADD COLUMN ...` you run yourself against the live DB) — ask me
+  when you're ready to make that kind of change and I'll write the migration for you rather than
+  just editing `schema.sql`.
+- **Editing routes, frontend files (`public/`), `server.js`** — safe; these don't touch stored
+  data at all.
+
+**5. Rebuild and restart just this service** (your other containers keep running untouched):
+
+```bash
+docker compose up -d --build pickem
+docker compose logs -f pickem
+```
+
+Watch the logs for the startup lines (`Pick'em app running at ...`) and check the app in the
+browser before moving on.
+
+**6. If something's wrong, roll back fast:**
+
+```bash
+git log --oneline          # find the last known-good commit
+git checkout <commit-hash> -- .
+docker compose up -d --build pickem
+```
+
+Your data is untouched by any of this — it lives in the `pickem_data` volume, completely separate
+from the code/image, so rebuilding or rolling back the app never risks the picks or leaderboard
+history. The only thing that risks data is manually altering the schema, which is why step 4 flags
+that case specifically.
+
+**Optional but worth it:** keep a second copy of the folder (e.g. `pickem-app-dev`) running on a
+different port with its own throwaway database, so you can try a change there first before
+touching the version your friends are actually using.
+
 ## Weekly workflow for the admin
 
 1. Go to **Admin** in the nav.

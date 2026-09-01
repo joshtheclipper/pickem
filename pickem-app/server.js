@@ -7,6 +7,7 @@ const cron = require('node-cron');
 const authRoutes = require('./routes/auth');
 const gamesRoutes = require('./routes/games');
 const picksRoutes = require('./routes/picks');
+const propsRoutes = require('./routes/props');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const { syncAndGrade } = require('./services/grading');
@@ -21,6 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/games', gamesRoutes);
 app.use('/api/picks', picksRoutes);
+app.use('/api/props', propsRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 
