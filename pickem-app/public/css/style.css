@@ -185,6 +185,37 @@ a { color: var(--gold-bright); }
 
 .status-final { color: var(--gold-bright); font-weight: 600; }
 
+/* --- Other players' picks reveal (locked games only) --- */
+.picks-reveal-wrap { padding: 0 14px 12px; }
+.reveal-btn {
+  background: none;
+  border: none;
+  color: var(--chalk-dim);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: 'Inter', sans-serif;
+}
+.reveal-btn:hover { color: var(--gold-bright); }
+.picks-reveal {
+  margin-top: 8px;
+  background: rgba(0,0,0,0.15);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+.pick-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 2px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+.pick-row:last-child { border-bottom: none; }
+.pick-row-team { font-family: 'Teko', sans-serif; font-size: 1rem; color: var(--chalk-dim); }
+.pick-row.pick-correct .pick-row-team { color: var(--gold-bright); font-weight: 700; }
+.pick-row.pick-incorrect .pick-row-team { color: var(--loss-red); }
+
 /* --- Prop questions --- */
 .prop {
   background: var(--charcoal);

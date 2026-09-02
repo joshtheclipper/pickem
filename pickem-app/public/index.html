@@ -216,6 +216,54 @@
       `;
 
       div.dataset.gameId = g.id;
+
+      if (g.locked) {
+        const revealWrap = document.createElement('div');
+        revealWrap.className = 'picks-reveal-wrap';
+        revealWrap.innerHTML = `
+          <button class="reveal-btn">Show picks ▾</button>
+          <div class="picks-reveal" style="display:none"></div>
+        `;
+        div.appendChild(revealWrap);
+
+        const revealBtn = revealWrap.querySelector('.reveal-btn');
+        const revealPanel = revealWrap.querySelector('.picks-reveal');
+        let loaded = false;
+
+        revealBtn.addEventListener('click', async () => {
+          const isOpen = revealPanel.style.display !== 'none';
+          if (isOpen) {
+            revealPanel.style.display = 'none';
+            revealBtn.textContent = 'Show picks ▾';
+            return;
+          }
+          revealBtn.textContent = 'Hide picks ▴';
+          revealPanel.style.display = '';
+          if (loaded) return;
+          revealPanel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
+          try {
+            const { picks } = await api.get(`/api/games/${g.id}/picks`);
+            loaded = true;
+            if (picks.length === 0) {
+              revealPanel.innerHTML = '<div class="empty" style="padding:10px">No one picked this game.</div>';
+              return;
+            }
+            revealPanel.innerHTML = '';
+            picks.forEach((p) => {
+              const row = document.createElement('div');
+              row.className = 'pick-row';
+              if (p.is_correct === 1) row.classList.add('pick-correct');
+              if (p.is_correct === 0) row.classList.add('pick-incorrect');
+              const teamLabel = p.pick === 'home' ? (g.home_team_abbr || g.home_team) : (g.away_team_abbr || g.away_team);
+              row.innerHTML = `<span>${p.username}</span><span class="pick-row-team">${teamLabel}</span>`;
+              revealPanel.appendChild(row);
+            });
+          } catch (err) {
+            revealPanel.innerHTML = `<div class="error-msg">${err.message}</div>`;
+          }
+        });
+      }
+
       const awayBtn = div.querySelector('.away-btn');
       const homeBtn = div.querySelector('.home-btn');
       if (!g.locked) {
