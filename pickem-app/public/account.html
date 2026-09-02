@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account — Pick'em Challenge</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="scorebar">
+    <a class="brand" href="/index.html">PICK<span>'</span>EM</a>
+    <nav>
+      <a href="/index.html">Picks</a>
+      <a href="/account.html" class="active">Account</a>
+      <a href="/admin.html" id="tabAdmin" style="display:none">Admin</a>
+    </nav>
+    <div class="who">
+      <span id="whoami"></span>
+      <button id="logoutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h2 style="margin:26px 0 4px">Account settings</h2>
+    <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:20px">
+      Change your username and/or PIN. Your current PIN is required to confirm any change.
+    </div>
+
+    <div id="msg"></div>
+
+    <form id="form" style="max-width:340px">
+      <div class="field">
+        <label for="newUsername">Username</label>
+        <input id="newUsername" maxlength="30">
+      </div>
+      <div class="field">
+        <label for="newPin">New PIN <span style="text-transform:none">(leave blank to keep current)</span></label>
+        <input id="newPin" type="password" inputmode="numeric" minlength="4" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="currentPin">Current PIN <span style="text-transform:none">(required to save)</span></label>
+        <input id="currentPin" type="password" inputmode="numeric" required autocomplete="current-password">
+      </div>
+      <button class="btn" type="submit" id="submitBtn">Save changes</button>
+    </form>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const form = document.getElementById('form');
+    const msg = document.getElementById('msg');
+    const submitBtn = document.getElementById('submitBtn');
+
+    async function init() {
+      const user = await requireLogin();
+      if (!user) return;
+      document.getElementById('whoami').textContent = user.username;
+      document.getElementById('newUsername').value = user.username;
+      if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await api.post('/api/auth/logout');
+      window.location.href = '/login.html';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.innerHTML = '';
+      const new_username = document.getElementById('newUsername').value.trim();
+      const new_pin = document.getElementById('newPin').value;
+      const current_pin = document.getElementById('currentPin').value;
+
+      submitBtn.disabled = true;
+      try {
+        const { user } = await api.post('/api/auth/update', { current_pin, new_username, new_pin: new_pin || undefined });
+        msg.innerHTML = '<div class="ok-msg">Saved. Your account has been updated.</div>';
+        document.getElementById('whoami').textContent = user.username;
+        document.getElementById('currentPin').value = '';
+        document.getElementById('newPin').value = '';
+      } catch (err) {
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

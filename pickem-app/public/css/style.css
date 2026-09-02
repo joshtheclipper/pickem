@@ -176,6 +176,8 @@ a { color: var(--gold-bright); }
 .team-btn.right-side { flex-direction: row-reverse; text-align: right; }
 .team-btn img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .team-btn .abbr { font-family: 'Teko', sans-serif; font-size: 1.15rem; }
+.rank-badge { color: var(--gold-bright); font-weight: 700; }
+.team-btn.picked .rank-badge { color: var(--turf-dark); }
 .team-btn .score { font-family: 'Teko', sans-serif; font-size: 1.15rem; margin-left: auto; }
 .team-btn.right-side .score { margin-left: 0; margin-right: auto; }
 

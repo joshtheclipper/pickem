@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS games (
   away_score INTEGER,
   status TEXT NOT NULL DEFAULT 'scheduled', -- scheduled | in_progress | final
   winner TEXT, -- 'home' | 'away' | 'tie' | NULL
+  home_rank INTEGER, -- AP Top 25 rank (1-25), NULL if unranked
+  away_rank INTEGER,
+  odds_summary TEXT, -- e.g. "BUF -3.5, O/U 47.5" for display only, not used in grading
   included INTEGER NOT NULL DEFAULT 1, -- admin-selected for the challenge
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(espn_event_id)

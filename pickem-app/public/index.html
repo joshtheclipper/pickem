@@ -12,6 +12,7 @@
     <nav>
       <a href="#" id="tabPicks" class="active">Picks</a>
       <a href="#" id="tabBoard">Leaderboard</a>
+      <a href="/account.html">Account</a>
       <a href="/admin.html" id="tabAdmin" style="display:none">Admin</a>
     </nav>
     <div class="who">
@@ -196,19 +197,19 @@
 
       div.innerHTML = `
         <div class="game-meta">
-          <span>${timeStr}</span>
+          <span>${timeStr}${g.odds_summary ? ` &middot; ${g.odds_summary}` : ''}</span>
           <span>${statusText}</span>
         </div>
         <div class="matchup">
           <button class="team-btn away-btn ${g.my_pick === 'away' ? 'picked' : ''}" ${g.locked ? 'disabled' : ''}>
             ${g.away_team_logo ? `<img src="${g.away_team_logo}" alt="">` : ''}
-            <span class="abbr">${g.away_team_abbr || g.away_team}</span>
+            <span class="abbr">${g.away_rank ? `<span class="rank-badge">#${g.away_rank}</span> ` : ''}${g.away_team_abbr || g.away_team}</span>
             ${g.away_score !== null ? `<span class="score">${g.away_score}</span>` : ''}
           </button>
           <span class="at-sign">@</span>
           <button class="team-btn right-side home-btn ${g.my_pick === 'home' ? 'picked' : ''}" ${g.locked ? 'disabled' : ''}>
             ${g.home_team_logo ? `<img src="${g.home_team_logo}" alt="">` : ''}
-            <span class="abbr">${g.home_team_abbr || g.home_team}</span>
+            <span class="abbr">${g.home_rank ? `<span class="rank-badge">#${g.home_rank}</span> ` : ''}${g.home_team_abbr || g.home_team}</span>
             ${g.home_score !== null ? `<span class="score">${g.home_score}</span>` : ''}
           </button>
         </div>

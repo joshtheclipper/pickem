@@ -45,17 +45,22 @@ router.post('/select-games', requireAdmin, (req, res) => {
       espn_event_id, league, season_year, week, start_time,
       home_team, home_team_abbr, home_team_logo,
       away_team, away_team_abbr, away_team_logo,
-      home_score, away_score, status, winner, included
+      home_score, away_score, status, winner,
+      home_rank, away_rank, odds_summary, included
     ) VALUES (@espn_event_id, @league, @season_year, @week, @start_time,
       @home_team, @home_team_abbr, @home_team_logo,
       @away_team, @away_team_abbr, @away_team_logo,
-      @home_score, @away_score, @status, @winner, 1)
+      @home_score, @away_score, @status, @winner,
+      @home_rank, @away_rank, @odds_summary, 1)
     ON CONFLICT(espn_event_id) DO UPDATE SET
       start_time = excluded.start_time,
       home_score = excluded.home_score,
       away_score = excluded.away_score,
       status = excluded.status,
       winner = excluded.winner,
+      home_rank = excluded.home_rank,
+      away_rank = excluded.away_rank,
+      odds_summary = excluded.odds_summary,
       included = 1
   `);
 
@@ -77,6 +82,9 @@ router.post('/select-games', requireAdmin, (req, res) => {
         away_score: g.away_score !== undefined ? g.away_score : null,
         status: g.status || 'scheduled',
         winner: g.winner || null,
+        home_rank: g.home_rank || null,
+        away_rank: g.away_rank || null,
+        odds_summary: g.odds_summary || null,
       });
     }
   });

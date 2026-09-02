@@ -58,6 +58,24 @@ function normalizeEvent(ev, league, seasonYear, week) {
     else winner = 'tie';
   }
 
+  // AP Top 25 rank, when ESPN includes it. curatedRank.current is 1-25 for
+  // ranked teams; anything else (commonly 99) means unranked.
+  const homeRankRaw = home.curatedRank && home.curatedRank.current;
+  const awayRankRaw = away.curatedRank && away.curatedRank.current;
+  const home_rank = homeRankRaw && homeRankRaw <= 25 ? homeRankRaw : null;
+  const away_rank = awayRankRaw && awayRankRaw <= 25 ? awayRankRaw : null;
+
+  // Betting line, display-only — not used for grading (picks are graded
+  // straight-up by winner, never against the spread).
+  const odds = comp && comp.odds && comp.odds[0];
+  let odds_summary = null;
+  if (odds) {
+    const parts = [];
+    if (odds.details) parts.push(odds.details);
+    if (odds.overUnder) parts.push(`O/U ${odds.overUnder}`);
+    odds_summary = parts.length ? parts.join(' · ') : null;
+  }
+
   return {
     espn_event_id: ev.id,
     league,
@@ -74,9 +92,12 @@ function normalizeEvent(ev, league, seasonYear, week) {
     away_score: away.score !== undefined ? Number(away.score) : null,
     status,
     winner,
+    home_rank,
+    away_rank,
+    odds_summary,
     short_name: ev.shortName,
     name: ev.name,
   };
 }
 
-module.exports = { fetchScoreboard };
+module.exports = { fetchScoreboard, normalizeEvent };

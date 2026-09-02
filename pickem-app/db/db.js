@@ -26,4 +26,21 @@ if (isNew) {
   console.log(`Created new database at ${DB_PATH}`);
 }
 
+// Lightweight migrations for columns added after initial release. Safe to
+// run every startup — each one only fires if the column doesn't exist yet,
+// so it never touches existing data. CREATE TABLE IF NOT EXISTS (above)
+// only helps brand-new tables; altering an *existing* table needs this.
+const migrations = [
+  { table: 'games', column: 'home_rank', ddl: 'ALTER TABLE games ADD COLUMN home_rank INTEGER' },
+  { table: 'games', column: 'away_rank', ddl: 'ALTER TABLE games ADD COLUMN away_rank INTEGER' },
+  { table: 'games', column: 'odds_summary', ddl: 'ALTER TABLE games ADD COLUMN odds_summary TEXT' },
+];
+for (const m of migrations) {
+  const cols = db.prepare(`PRAGMA table_info(${m.table})`).all();
+  if (!cols.some((c) => c.name === m.column)) {
+    db.exec(m.ddl);
+    console.log(`Migrated: added ${m.table}.${m.column}`);
+  }
+}
+
 module.exports = db;

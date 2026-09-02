@@ -12,6 +12,7 @@
     <nav>
       <a href="/index.html">Picks</a>
       <a href="/index.html" id="goBoard">Leaderboard</a>
+      <a href="/account.html">Account</a>
       <a href="/admin.html" class="active">Admin</a>
     </nav>
     <div class="who">
@@ -217,7 +218,7 @@
         row.innerHTML = `
           <label>
             <input type="checkbox" ${g.selected ? 'checked' : ''} data-idx="${idx}">
-            <span>${g.away_team_abbr} @ ${g.home_team_abbr} — <span style="color:var(--chalk-dim)">${timeStr}</span></span>
+            <span>${g.away_rank ? `#${g.away_rank} ` : ''}${g.away_team_abbr} @ ${g.home_rank ? `#${g.home_rank} ` : ''}${g.home_team_abbr} — <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span></span>
           </label>
           ${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}
         `;
