@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Pick'em Challenge</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/admin-improvements.css">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
@@ -29,7 +30,10 @@
   <div class="wrap">
     <h2 style="margin:26px 0 4px">Set the weekly slate</h2>
     <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:18px">
-      Pull the schedule from ESPN, choose the 10–15 games for the challenge, and save.
+      Switching league or week automatically pulls the latest schedule from ESPN. Choose the
+      10–15 games for the challenge and save. <span class="pill ranked">Top 25</span> and
+      <span class="pill close">Close game</span> (spread of 3 or fewer) are flagged to help you
+      spot notable matchups.
     </div>
 
     <div class="tabbar">
@@ -43,16 +47,20 @@
     </div>
 
     <div class="admin-actions" style="margin-bottom:16px">
-      <button class="btn secondary" id="fetchBtn">Fetch games from ESPN</button>
-      <span id="selectedCount" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem"></span>
+      <button class="btn secondary" id="fetchBtn">Refresh from ESPN</button>
+      <span id="fetchStatus" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem"></span>
+      <span id="selectedCount" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem;margin-left:auto"></span>
     </div>
 
     <div id="adminMsg"></div>
     <div id="adminGamesList"></div>
 
-    <div class="admin-actions">
-      <button class="btn" id="saveBtn" style="width:auto" disabled>Save selected games</button>
+    <div class="section-label" style="margin-top:40px">Manage picks — <span id="managePicksLabel">NFL Week 1</span></div>
+    <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
+      Set or correct any player's pick on a saved game — including games that have already locked
+      or gone final. Editing a graded game re-grades that pick immediately.
     </div>
+    <div id="managePicksList"></div>
 
     <div class="section-label" style="margin-top:40px">Prop questions — <span id="propsSectionLabel">NFL Week 1</span></div>
     <div class="prop-form">
@@ -77,12 +85,83 @@
     <div id="playersList"></div>
   </div>
 
+  <!-- Floating save bar: appears only while there are unsaved changes to the
+       game selection checkboxes, so the admin can't lose picks by
+       navigating away without noticing. Hidden by default. -->
+  <div id="floatingSaveBar" class="floating-save-bar" style="display:none">
+    <span class="floating-save-text">Unsaved game selection changes</span>
+    <button class="btn" id="floatingSaveBtn" style="width:auto">Save selected games</button>
+  </div>
+
   <script src="/js/api.js"></script>
   <script>
     let league = 'NFL';
     let week = estimateCurrentWeek();
     let year = currentSeasonYear();
     let fetchedGames = []; // games pulled from ESPN, with .selected flag
+
+    // Tracks the last-saved/last-fetched selection state so we can warn the
+    // admin before they navigate away with unsaved checkbox changes.
+    let selectionBaseline = new Map(); // espn_event_id -> was it selected
+
+    function captureSelectionBaseline() {
+      selectionBaseline = new Map(fetchedGames.map((g) => [g.espn_event_id, !!g.selected]));
+    }
+
+    function hasUnsavedSelectionChanges() {
+      for (const g of fetchedGames) {
+        const baseline = selectionBaseline.has(g.espn_event_id) ? selectionBaseline.get(g.espn_event_id) : false;
+        if (baseline !== !!g.selected) return true;
+      }
+      return false;
+    }
+
+    function updateFloatingSaveBar() {
+      document.getElementById('floatingSaveBar').style.display = hasUnsavedSelectionChanges() ? 'flex' : 'none';
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (hasUnsavedSelectionChanges()) {
+        e.preventDefault();
+        e.returnValue = ''; // required for the confirmation dialog to appear
+      }
+    });
+
+    // Extracts the numeric point spread out of an odds summary string like
+    // "BUF -3.5, O/U 47.5" (the first number is always the spread). Used to
+    // flag close games (spread of 3 or fewer) for both freshly-fetched ESPN
+    // events and already-saved games — the spread itself isn't persisted as
+    // its own column, only inside odds_summary, so this is computed
+    // client-side wherever odds_summary is available.
+    function parseSpreadValue(oddsSummary) {
+      if (!oddsSummary) return null;
+      const match = oddsSummary.match(/-?\d+(\.\d+)?/);
+      if (!match) return null;
+      return Math.abs(parseFloat(match[0]));
+    }
+
+    function isRankedGame(g) {
+      return !!(g.home_rank || g.away_rank);
+    }
+
+    function isCloseGame(g) {
+      const spread = parseSpreadValue(g.odds_summary);
+      return spread !== null && spread <= 3;
+    }
+
+    function highlightBadges(g) {
+      let html = '';
+      if (isRankedGame(g)) html += '<span class="pill ranked">Top 25</span>';
+      if (isCloseGame(g)) html += '<span class="pill close">Close game</span>';
+      return html;
+    }
+
+    function highlightClasses(g) {
+      const classes = [];
+      if (isRankedGame(g)) classes.push('row-ranked');
+      if (isCloseGame(g)) classes.push('row-close');
+      return classes.join(' ');
+    }
 
     async function init() {
       const user = await requireLogin();
@@ -93,35 +172,69 @@
       }
       document.getElementById('whoami').textContent = user.username;
       loadPlayers();
-      loadAdminProps();
+      refreshAdminView();
     }
 
+    // Guards every link in the top nav (brand logo, Picks, Leaderboard,
+    // Account, Admin) with the same explicit confirm used for league/week
+    // switching. beforeunload is kept below as a fallback for closing the
+    // tab or typing a new URL, but it's unreliable for in-app link clicks
+    // across browsers, so this is the mechanism that actually protects
+    // "leaving to any other page" reliably.
+    document.querySelectorAll('.scorebar a[href]').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        if (!confirmDiscardUnsavedSelection()) {
+          e.preventDefault();
+        }
+      });
+    });
+
     document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if (!confirmDiscardUnsavedSelection()) return;
       await api.post('/api/auth/logout');
       window.location.href = '/login.html';
     });
 
+    // Switching league/week happens without a page reload, so beforeunload
+    // won't catch it — confirm explicitly before discarding unsaved
+    // checkbox selections in the ESPN fetch list.
+    function confirmDiscardUnsavedSelection() {
+      if (!hasUnsavedSelectionChanges()) return true;
+      return window.confirm('You have unsaved game selections. Switching will discard them — continue?');
+    }
+
     document.querySelectorAll('.tabbar .league-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (!confirmDiscardUnsavedSelection()) return;
         document.querySelectorAll('.tabbar .league-tab').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         league = btn.dataset.league;
         weekLabel();
-        clearList();
-        loadAdminProps();
+        refreshAdminView();
       });
     });
-    document.getElementById('weekUp').addEventListener('click', () => { week++; weekLabel(); clearList(); loadAdminProps(); });
-    document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; weekLabel(); clearList(); loadAdminProps(); } });
+    document.getElementById('weekUp').addEventListener('click', () => {
+      if (!confirmDiscardUnsavedSelection()) return;
+      week++; weekLabel(); refreshAdminView();
+    });
+    document.getElementById('weekDown').addEventListener('click', () => {
+      if (week <= 1) return;
+      if (!confirmDiscardUnsavedSelection()) return;
+      week--; weekLabel(); refreshAdminView();
+    });
     function weekLabel() {
       document.getElementById('weekLabel').textContent = `Week ${week}`;
       document.getElementById('propsSectionLabel').textContent = `${league} Week ${week}`;
+      document.getElementById('managePicksLabel').textContent = `${league} Week ${week}`;
     }
-    function clearList() {
-      fetchedGames = [];
-      document.getElementById('adminGamesList').innerHTML = '';
-      document.getElementById('saveBtn').disabled = true;
-      updateCount();
+
+    // Pulls everything relevant to the current league/week: the ESPN slate
+    // (for building/adjusting the challenge), the already-saved games (for
+    // managing picks), and prop questions.
+    function refreshAdminView() {
+      fetchGames();
+      loadManagePicks();
+      loadAdminProps();
     }
 
     // --- Prop questions ---
@@ -192,21 +305,29 @@
       return div;
     }
 
-    document.getElementById('fetchBtn').addEventListener('click', async () => {
+    // --- ESPN fetch (now automatic on league/week change; button is a manual refresh) ---
+    document.getElementById('fetchBtn').addEventListener('click', () => fetchGames());
+
+    async function fetchGames() {
       const list = document.getElementById('adminGamesList');
       const msg = document.getElementById('adminMsg');
+      const status = document.getElementById('fetchStatus');
       msg.innerHTML = '';
+      status.textContent = 'Fetching from ESPN…';
       list.innerHTML = '<div class="empty">Fetching…</div>';
       try {
         const { games } = await api.get(`/api/admin/fetch-games?league=${league}&week=${week}&year=${year}`);
         fetchedGames = games.map((g) => ({ ...g, selected: g.included }));
+        captureSelectionBaseline();
         renderAdminGames();
-        document.getElementById('saveBtn').disabled = false;
+        updateFloatingSaveBar();
+        status.textContent = `Loaded ${games.length} game${games.length === 1 ? '' : 's'} from ESPN`;
       } catch (err) {
         list.innerHTML = '';
+        status.textContent = '';
         msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
-    });
+    }
 
     function renderAdminGames() {
       const list = document.getElementById('adminGamesList');
@@ -219,17 +340,29 @@
         const kickoff = new Date(g.start_time);
         const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const row = document.createElement('div');
-        row.className = 'admin-list-item';
+        row.className = `admin-list-item admin-game-card ${highlightClasses(g)}`;
         row.innerHTML = `
-          <label>
+          <label class="admin-game-label">
             <input type="checkbox" ${g.selected ? 'checked' : ''} data-idx="${idx}">
-            <span>${g.away_rank ? `#${g.away_rank} ` : ''}${g.away_team_abbr} @ ${g.home_rank ? `#${g.home_rank} ` : ''}${g.home_team_abbr} — <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span></span>
+            <span class="admin-game-team">
+              ${g.away_team_logo ? `<img src="${g.away_team_logo}" class="admin-game-logo" alt="">` : ''}
+              <span class="admin-game-abbr">${g.away_rank ? `<span class="rank-badge">#${g.away_rank}</span> ` : ''}${g.away_team_abbr}</span>
+            </span>
+            <span class="admin-game-at">@</span>
+            <span class="admin-game-team">
+              ${g.home_team_logo ? `<img src="${g.home_team_logo}" class="admin-game-logo" alt="">` : ''}
+              <span class="admin-game-abbr">${g.home_rank ? `<span class="rank-badge">#${g.home_rank}</span> ` : ''}${g.home_team_abbr}</span>
+            </span>
           </label>
-          ${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}
+          <div class="admin-game-meta">
+            <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span>
+            <span>${highlightBadges(g)}
+          </div>
         `;
         row.querySelector('input').addEventListener('change', (e) => {
           fetchedGames[idx].selected = e.target.checked;
           updateCount();
+          updateFloatingSaveBar();
         });
         list.appendChild(row);
       });
@@ -241,20 +374,152 @@
       document.getElementById('selectedCount').textContent = n ? `${n} selected` : '';
     }
 
-    document.getElementById('saveBtn').addEventListener('click', async () => {
+    async function saveSelectedGames() {
       const msg = document.getElementById('adminMsg');
       const chosen = fetchedGames.filter((g) => g.selected);
       if (chosen.length === 0) {
         msg.innerHTML = '<div class="error-msg">Select at least one game.</div>';
         return;
       }
+      const btn = document.getElementById('floatingSaveBtn');
+      btn.disabled = true;
       try {
         await api.post('/api/admin/select-games', { games: chosen });
         msg.innerHTML = `<div class="ok-msg">Saved ${chosen.length} games for ${league} Week ${week}.</div>`;
+        captureSelectionBaseline();
+        updateFloatingSaveBar();
+        loadManagePicks();
       } catch (err) {
         msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
       }
-    });
+    }
+
+    document.getElementById('floatingSaveBtn').addEventListener('click', saveSelectedGames);
+
+    // --- Manage picks (admin can set/correct any player's pick, any time) ---
+    async function loadManagePicks() {
+      const list = document.getElementById('managePicksList');
+      list.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const { games } = await api.get(`/api/games?league=${league}&week=${week}&year=${year}`);
+        if (games.length === 0) {
+          list.innerHTML = '<div class="empty">No saved games yet for this week. Select and save games above first.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        games.forEach((g) => list.appendChild(renderManagePickGame(g)));
+      } catch (err) {
+        list.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    function renderManagePickGame(g) {
+      const wrap = document.createElement('div');
+      wrap.className = `admin-list-item manage-pick-game ${highlightClasses(g)}`;
+
+      const kickoff = new Date(g.start_time);
+      const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const statusTag = g.status === 'final' ? ' · FINAL' : (g.locked ? ' · Locked' : ' · Open');
+
+      const header = document.createElement('div');
+      header.className = 'manage-pick-header';
+      header.innerHTML = `
+        <span class="manage-pick-header-matchup">
+          ${g.away_team_logo ? `<img src="${g.away_team_logo}" class="admin-game-logo" alt="">` : ''}
+          ${g.away_rank ? `#${g.away_rank} ` : ''}${g.away_team_abbr} @
+          ${g.home_team_logo ? `<img src="${g.home_team_logo}" class="admin-game-logo" alt="">` : ''}
+          ${g.home_rank ? `#${g.home_rank} ` : ''}${g.home_team_abbr}
+          <span style="color:var(--chalk-dim);font-size:0.78rem"> — ${timeStr}${statusTag}</span>
+          ${highlightBadges(g)}
+        </span>
+        <button class="btn secondary manage-toggle-btn" style="width:auto">Manage picks ▾</button>
+      `;
+      wrap.appendChild(header);
+
+      const panel = document.createElement('div');
+      panel.className = 'manage-picks-panel';
+      panel.style.display = 'none';
+      wrap.appendChild(panel);
+
+      let loaded = false;
+      const toggleBtn = header.querySelector('.manage-toggle-btn');
+      toggleBtn.addEventListener('click', async () => {
+        const isOpen = panel.style.display !== 'none';
+        if (isOpen) {
+          panel.style.display = 'none';
+          toggleBtn.textContent = 'Manage picks ▾';
+          return;
+        }
+        panel.style.display = '';
+        toggleBtn.textContent = 'Hide picks ▴';
+        if (loaded) return;
+        panel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
+        try {
+          const { picks } = await api.get(`/api/admin/games/${g.id}/picks`);
+          loaded = true;
+          panel.innerHTML = '';
+          if (picks.length === 0) {
+            panel.innerHTML = '<div class="empty" style="padding:10px">No players yet.</div>';
+            return;
+          }
+          picks.forEach((p) => panel.appendChild(renderManagePickRow(g, p)));
+        } catch (err) {
+          panel.innerHTML = `<div class="error-msg">${err.message}</div>`;
+        }
+      });
+
+      return wrap;
+    }
+
+    function renderManagePickRow(g, p) {
+      const row = document.createElement('div');
+      row.className = 'manage-pick-row';
+      if (p.is_correct === 1) row.classList.add('pick-correct');
+      if (p.is_correct === 0) row.classList.add('pick-incorrect');
+
+      const label = document.createElement('span');
+      label.textContent = p.username;
+      row.appendChild(label);
+
+      const btnWrap = document.createElement('span');
+      btnWrap.className = 'manage-pick-btns';
+
+      const awayBtn = document.createElement('button');
+      awayBtn.className = `manage-pick-btn ${p.pick === 'away' ? 'picked' : ''}`;
+      awayBtn.innerHTML = `${g.away_team_logo ? `<img src="${g.away_team_logo}" class="manage-pick-logo" alt="">` : ''}<span>${g.away_team_abbr}</span>`;
+
+      const homeBtn = document.createElement('button');
+      homeBtn.className = `manage-pick-btn ${p.pick === 'home' ? 'picked' : ''}`;
+      homeBtn.innerHTML = `${g.home_team_logo ? `<img src="${g.home_team_logo}" class="manage-pick-logo" alt="">` : ''}<span>${g.home_team_abbr}</span>`;
+
+      async function setPick(pick) {
+        awayBtn.disabled = true;
+        homeBtn.disabled = true;
+        try {
+          const result = await api.post('/api/admin/picks/edit', { game_id: g.id, user_id: p.user_id, pick });
+          awayBtn.classList.toggle('picked', pick === 'away');
+          homeBtn.classList.toggle('picked', pick === 'home');
+          row.classList.remove('pick-correct', 'pick-incorrect');
+          if (result.is_correct === 1) row.classList.add('pick-correct');
+          if (result.is_correct === 0) row.classList.add('pick-incorrect');
+        } catch (err) {
+          document.getElementById('adminMsg').innerHTML = `<div class="error-msg">${err.message}</div>`;
+        } finally {
+          awayBtn.disabled = false;
+          homeBtn.disabled = false;
+        }
+      }
+
+      awayBtn.addEventListener('click', () => setPick('away'));
+      homeBtn.addEventListener('click', () => setPick('home'));
+
+      btnWrap.appendChild(awayBtn);
+      btnWrap.appendChild(homeBtn);
+      row.appendChild(btnWrap);
+      return row;
+    }
 
     document.getElementById('syncBtn').addEventListener('click', async () => {
       const msg = document.getElementById('syncMsg');
@@ -262,6 +527,7 @@
       try {
         const result = await api.post('/api/admin/sync');
         msg.innerHTML = `<div class="ok-msg">Synced: ${result.updatedGames} game updates, ${result.gradedPicks} picks graded.</div>`;
+        loadManagePicks();
       } catch (err) {
         msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
