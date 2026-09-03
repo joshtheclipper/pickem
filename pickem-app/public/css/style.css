@@ -171,7 +171,7 @@ a { color: var(--gold-bright); }
   transition: border-color 0.12s, background 0.12s;
 }
 .team-btn:hover:not(:disabled) { border-color: var(--gold); }
-.team-btn:disabled { cursor: default; opacity: 0.75; }
+.team-btn:disabled { cursor: default; }
 .team-btn.picked { background: var(--gold); color: var(--turf-dark); border-color: var(--gold); font-weight: 600; }
 .team-btn.right-side { flex-direction: row-reverse; text-align: right; }
 .team-btn img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
@@ -185,7 +185,7 @@ a { color: var(--gold-bright); }
 
 .status-final { color: var(--gold-bright); font-weight: 600; }
 
-/* --- Other players' picks reveal (locked games only) --- */
+/* --- Other players' picks reveal --- */
 .picks-reveal-wrap { padding: 0 14px 12px; }
 .reveal-btn {
   background: none;
@@ -391,8 +391,104 @@ a { color: var(--gold-bright); }
   padding: 12px 16px; margin-bottom: 20px; font-size: 0.85rem; color: var(--chalk-dim);
 }
 
+/* --- iOS "Add to Home Screen" install banner --- */
+.ios-install-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 380px;
+  background: var(--charcoal);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 16px 18px 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  z-index: 9999;
+  text-align: center;
+}
+
+.ios-install-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--chalk);
+}
+
+.ios-install-text strong {
+  color: var(--gold-bright);
+}
+
+.ios-share-icon {
+  display: inline-block;
+  color: var(--gold-bright);
+  font-weight: 700;
+}
+
+.ios-install-close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--chalk-dim);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+.ios-install-close:hover { color: var(--gold); }
+
+.ios-install-arrow {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 9px solid var(--charcoal);
+}
+
 @media (max-width: 480px) {
+  .ios-install-banner { width: 92%; padding: 14px 16px 12px; }
   h1 { font-size: 2.1rem; }
   .team-btn .abbr { font-size: 1rem; }
   .scorebar { padding: 14px 16px; }
+}
+
+/* --- Pick-to-see: player-initiated lock-in --- */
+/* A slightly different tone from the kickoff-based "🔒 Locked" badge, so
+   players can tell "I locked this myself" apart from "this game started". */
+.game-meta .lock.pick-locked-badge { color: var(--chalk-dim); }
+
+/* --- Floating action bar (shared pattern: admin's "save selected games",
+   player's "lock in picks") --- */
+.floating-save-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9998; /* just under the iOS install banner's 9999, in the rare case both show */
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--charcoal);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  max-width: 92vw;
+}
+.floating-save-text {
+  font-size: 0.85rem;
+  color: var(--chalk-dim);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .floating-save-bar { flex-direction: column; gap: 8px; padding: 12px 14px; }
+  .floating-save-text { white-space: normal; text-align: center; }
 }

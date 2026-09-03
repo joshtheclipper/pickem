@@ -20,7 +20,7 @@ router.get('/', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT game_id, pick, is_correct FROM picks WHERE user_id = ? AND game_id IN (${games.map(() => '?').join(',') || 'NULL'})`
+      `SELECT game_id, pick, is_correct, locked_in FROM picks WHERE user_id = ? AND game_id IN (${games.map(() => '?').join(',') || 'NULL'})`
     )
     .all(req.user.id, ...games.map((g) => g.id));
 
@@ -32,17 +32,37 @@ router.get('/', requireAuth, (req, res) => {
     locked: new Date(g.start_time) <= now || g.status !== 'scheduled',
     my_pick: pickMap[g.id] ? pickMap[g.id].pick : null,
     my_pick_correct: pickMap[g.id] ? pickMap[g.id].is_correct : null,
+    my_pick_locked: pickMap[g.id] ? !!pickMap[g.id].locked_in : false,
   }));
 
   res.json({ games: enriched });
 });
 
 // GET /api/games/:id/picks - everyone's pick on a single game.
-// Visible to any logged-in player at any time (not gated on lock/kickoff) —
-// players can see who's picked what before games start, same as after.
+//
+// "Pick-to-see": before a game starts, a player can only view everyone
+// else's pick on it once they've locked in their own pick for that game.
+// Once the game itself has started (or finished), it's visible to everyone
+// regardless — same as the old kickoff-based reveal, just no longer the
+// only way in.
 router.get('/:id/picks', requireAuth, (req, res) => {
   const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const gameLocked = game.status !== 'scheduled' || new Date(game.start_time) <= new Date();
+
+  if (!gameLocked) {
+    const myPick = db
+      .prepare('SELECT locked_in FROM picks WHERE user_id = ? AND game_id = ?')
+      .get(req.user.id, req.params.id);
+    const myPickLocked = myPick ? !!myPick.locked_in : false;
+    if (!myPickLocked) {
+      return res.status(403).json({
+        error: 'Lock in your pick on this game to see everyone else\u2019s picks',
+        pick_to_see: true,
+      });
+    }
+  }
 
   const picks = db
     .prepare(

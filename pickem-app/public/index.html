@@ -69,6 +69,14 @@
     <div class="ios-install-arrow"></div>
   </div>
 
+  <!-- Floating "lock in picks" bar: appears whenever the player has made a
+       pick that isn't locked in yet on the currently-viewed week. Locking
+       in is what unlocks pick-to-see for that game. Hidden by default. -->
+  <div id="lockPicksBar" class="floating-save-bar" style="display:none">
+    <span class="floating-save-text">You have picks that aren't locked in yet</span>
+    <button class="btn" id="lockPicksBtn" style="width:auto">Lock in picks</button>
+  </div>
+
   <script src="/js/api.js"></script>
   <script src="/js/installPrompt.js"></script>
   <script>
@@ -76,6 +84,7 @@
     let week = estimateCurrentWeek();
     let year = currentSeasonYear();
     let boardScope = 'overall';
+    let currentGames = []; // last-loaded games for the visible league/week, used to drive the lock-in bar
 
     const gamesList = document.getElementById('gamesList');
     const weekLabel = document.getElementById('weekLabel');
@@ -131,6 +140,8 @@
       loadProps();
       try {
         const { games } = await api.get(`/api/games?league=${league}&week=${week}&year=${year}`);
+        currentGames = games;
+        updateLockBar();
         if (games.length === 0) {
           gamesList.innerHTML = `<div class="empty">No games selected yet for ${league} Week ${week}.<br>Check back once the admin sets the slate.</div>`;
           return;
@@ -141,6 +152,29 @@
         gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
     }
+
+    // --- Lock in picks ---
+    // A pick only becomes visible to other players once it's locked in (or
+    // the game starts). This floating bar appears whenever the current
+    // league/week has a made-but-unlocked pick on a game that hasn't
+    // started yet, and lets the player commit all of them at once.
+    function updateLockBar() {
+      const hasUnlockedPicks = currentGames.some((g) => g.my_pick && !g.my_pick_locked && !g.locked);
+      document.getElementById('lockPicksBar').style.display = hasUnlockedPicks ? 'flex' : 'none';
+    }
+
+    document.getElementById('lockPicksBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('lockPicksBtn');
+      btn.disabled = true;
+      try {
+        await api.post('/api/picks/lock', { league, week, year });
+        await loadGames(); // refresh so badges/buttons reflect the newly-locked state
+      } catch (err) {
+        picksMsg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
 
     const propsList = document.getElementById('propsList');
 
@@ -212,7 +246,11 @@
 
       const statusText = g.status === 'final'
         ? `<span class="status-final">FINAL</span>`
-        : (g.locked ? `<span class="lock">🔒 Locked</span>` : `<span class="lock">Picks open</span>`);
+        : (g.locked
+            ? `<span class="lock">🔒 Locked</span>`
+            : (g.my_pick_locked
+                ? `<span class="lock pick-locked-badge">🔒 Pick locked</span>`
+                : `<span class="lock">Pick open</span>`));
 
       div.innerHTML = `
         <div class="game-meta">
@@ -220,13 +258,13 @@
           <span>${statusText}</span>
         </div>
         <div class="matchup">
-          <button class="team-btn away-btn ${g.my_pick === 'away' ? 'picked' : ''}" ${g.locked ? 'disabled' : ''}>
+          <button class="team-btn away-btn ${g.my_pick === 'away' ? 'picked' : ''}" ${(g.locked || g.my_pick_locked) ? 'disabled' : ''}>
             ${g.away_team_logo ? `<img src="${g.away_team_logo}" alt="">` : ''}
             <span class="abbr">${g.away_rank ? `<span class="rank-badge">#${g.away_rank}</span> ` : ''}${g.away_team_abbr || g.away_team}</span>
             ${g.away_score !== null ? `<span class="score">${g.away_score}</span>` : ''}
           </button>
           <span class="at-sign">@</span>
-          <button class="team-btn right-side home-btn ${g.my_pick === 'home' ? 'picked' : ''}" ${g.locked ? 'disabled' : ''}>
+          <button class="team-btn right-side home-btn ${g.my_pick === 'home' ? 'picked' : ''}" ${(g.locked || g.my_pick_locked) ? 'disabled' : ''}>
             ${g.home_team_logo ? `<img src="${g.home_team_logo}" alt="">` : ''}
             <span class="abbr">${g.home_rank ? `<span class="rank-badge">#${g.home_rank}</span> ` : ''}${g.home_team_abbr || g.home_team}</span>
             ${g.home_score !== null ? `<span class="score">${g.home_score}</span>` : ''}
@@ -280,13 +318,19 @@
             revealPanel.appendChild(row);
           });
         } catch (err) {
-          revealPanel.innerHTML = `<div class="error-msg">${err.message}</div>`;
+          if (err.status === 403) {
+            // Pick-to-see: they haven't locked in their own pick on this
+            // game yet, so this isn't really an error — just a prompt.
+            revealPanel.innerHTML = `<div class="empty" style="padding:10px">${err.message}</div>`;
+          } else {
+            revealPanel.innerHTML = `<div class="error-msg">${err.message}</div>`;
+          }
         }
       });
 
       const awayBtn = div.querySelector('.away-btn');
       const homeBtn = div.querySelector('.home-btn');
-      if (!g.locked) {
+      if (!g.locked && !g.my_pick_locked) {
         awayBtn.addEventListener('click', () => makePick(g.id, 'away', div));
         homeBtn.addEventListener('click', () => makePick(g.id, 'home', div));
       }
@@ -307,6 +351,12 @@
 
       try {
         await api.post('/api/picks', { game_id: gameId, pick });
+        const cached = currentGames.find((g) => g.id === gameId);
+        if (cached) {
+          cached.my_pick = pick;
+          cached.my_pick_locked = false;
+          updateLockBar();
+        }
       } catch (err) {
         // revert the optimistic change on failure
         awayBtn.classList.toggle('picked', prevAway);
