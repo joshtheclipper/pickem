@@ -56,7 +56,21 @@
 
   </div>
 
+  <!-- iOS "Add to Home Screen" install banner. Hidden by default; shown via
+       JS only for iPhone/iPad Safari visitors who haven't installed the app
+       and haven't dismissed the banner recently (see installPrompt.js). -->
+  <div id="ios-install-banner" class="ios-install-banner" style="display:none">
+    <button id="iosInstallClose" class="ios-install-close" aria-label="Dismiss">&times;</button>
+    <p class="ios-install-text">
+      Install Pick'em on your iPhone: tap the <strong>Share</strong> icon
+      <span class="ios-share-icon" aria-hidden="true">&#8593;</span>
+      below, then choose <strong>Add to Home Screen</strong>.
+    </p>
+    <div class="ios-install-arrow"></div>
+  </div>
+
   <script src="/js/api.js"></script>
+  <script src="/js/installPrompt.js"></script>
   <script>
     let league = 'NFL';
     let week = estimateCurrentWeek();
@@ -222,52 +236,53 @@
 
       div.dataset.gameId = g.id;
 
-      if (g.locked) {
-        const revealWrap = document.createElement('div');
-        revealWrap.className = 'picks-reveal-wrap';
-        revealWrap.innerHTML = `
-          <button class="reveal-btn">Show picks ▾</button>
-          <div class="picks-reveal" style="display:none"></div>
-        `;
-        div.appendChild(revealWrap);
+      // Everyone's picks are visible on any game at any time — not just
+      // after it locks. The pick buttons themselves stay disabled once
+      // locked (handled below), but the reveal panel is always available.
+      const revealWrap = document.createElement('div');
+      revealWrap.className = 'picks-reveal-wrap';
+      revealWrap.innerHTML = `
+        <button class="reveal-btn">Show picks ▾</button>
+        <div class="picks-reveal" style="display:none"></div>
+      `;
+      div.appendChild(revealWrap);
 
-        const revealBtn = revealWrap.querySelector('.reveal-btn');
-        const revealPanel = revealWrap.querySelector('.picks-reveal');
-        let loaded = false;
+      const revealBtn = revealWrap.querySelector('.reveal-btn');
+      const revealPanel = revealWrap.querySelector('.picks-reveal');
+      let loaded = false;
 
-        revealBtn.addEventListener('click', async () => {
-          const isOpen = revealPanel.style.display !== 'none';
-          if (isOpen) {
-            revealPanel.style.display = 'none';
-            revealBtn.textContent = 'Show picks ▾';
+      revealBtn.addEventListener('click', async () => {
+        const isOpen = revealPanel.style.display !== 'none';
+        if (isOpen) {
+          revealPanel.style.display = 'none';
+          revealBtn.textContent = 'Show picks ▾';
+          return;
+        }
+        revealBtn.textContent = 'Hide picks ▴';
+        revealPanel.style.display = '';
+        if (loaded) return;
+        revealPanel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
+        try {
+          const { picks } = await api.get(`/api/games/${g.id}/picks`);
+          loaded = true;
+          if (picks.length === 0) {
+            revealPanel.innerHTML = '<div class="empty" style="padding:10px">No one has picked this game yet.</div>';
             return;
           }
-          revealBtn.textContent = 'Hide picks ▴';
-          revealPanel.style.display = '';
-          if (loaded) return;
-          revealPanel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
-          try {
-            const { picks } = await api.get(`/api/games/${g.id}/picks`);
-            loaded = true;
-            if (picks.length === 0) {
-              revealPanel.innerHTML = '<div class="empty" style="padding:10px">No one picked this game.</div>';
-              return;
-            }
-            revealPanel.innerHTML = '';
-            picks.forEach((p) => {
-              const row = document.createElement('div');
-              row.className = 'pick-row';
-              if (p.is_correct === 1) row.classList.add('pick-correct');
-              if (p.is_correct === 0) row.classList.add('pick-incorrect');
-              const teamLabel = p.pick === 'home' ? (g.home_team_abbr || g.home_team) : (g.away_team_abbr || g.away_team);
-              row.innerHTML = `<span>${p.username}</span><span class="pick-row-team">${teamLabel}</span>`;
-              revealPanel.appendChild(row);
-            });
-          } catch (err) {
-            revealPanel.innerHTML = `<div class="error-msg">${err.message}</div>`;
-          }
-        });
-      }
+          revealPanel.innerHTML = '';
+          picks.forEach((p) => {
+            const row = document.createElement('div');
+            row.className = 'pick-row';
+            if (p.is_correct === 1) row.classList.add('pick-correct');
+            if (p.is_correct === 0) row.classList.add('pick-incorrect');
+            const teamLabel = p.pick === 'home' ? (g.home_team_abbr || g.home_team) : (g.away_team_abbr || g.away_team);
+            row.innerHTML = `<span>${p.username}</span><span class="pick-row-team">${teamLabel}</span>`;
+            revealPanel.appendChild(row);
+          });
+        } catch (err) {
+          revealPanel.innerHTML = `<div class="error-msg">${err.message}</div>`;
+        }
+      });
 
       const awayBtn = div.querySelector('.away-btn');
       const homeBtn = div.querySelector('.home-btn');
