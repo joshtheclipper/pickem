@@ -111,6 +111,67 @@ router.post('/sync', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/games/:id/picks - every player's pick on a single game
+// (or null if they haven't picked), regardless of lock status. Used by the
+// admin "Manage picks" panel so picks can be corrected at any time.
+router.get('/games/:id/picks', requireAdmin, (req, res) => {
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const rows = db
+    .prepare(
+      `SELECT u.id AS user_id, u.username, p.pick, p.is_correct
+       FROM users u
+       LEFT JOIN picks p ON p.user_id = u.id AND p.game_id = ?
+       ORDER BY u.username ASC`
+    )
+    .all(req.params.id);
+
+  res.json({ game, picks: rows });
+});
+
+// POST /api/admin/picks/edit  { game_id, user_id, pick: 'home'|'away' }
+// Admin override: sets or changes a player's pick on a game regardless of
+// whether picks are locked. If the game is already final, the pick is
+// re-graded immediately rather than waiting for the next sync (the sync job
+// only grades picks where is_correct IS NULL, so a correction here would
+// otherwise be silently skipped).
+router.post('/picks/edit', requireAdmin, (req, res) => {
+  const { game_id, user_id, pick } = req.body || {};
+  if (!game_id || !user_id || !['home', 'away'].includes(pick)) {
+    return res.status(400).json({ error: "game_id, user_id, and pick ('home'|'away') are required" });
+  }
+
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(game_id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(user_id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  let isCorrect = null;
+  if (game.status === 'final' && game.winner) {
+    isCorrect = game.winner === 'tie' ? 0 : pick === game.winner ? 1 : 0;
+  }
+
+  const existing = db.prepare('SELECT id FROM picks WHERE user_id = ? AND game_id = ?').get(user_id, game_id);
+  if (existing) {
+    db.prepare("UPDATE picks SET pick = ?, is_correct = ?, updated_at = datetime('now') WHERE id = ?").run(
+      pick,
+      isCorrect,
+      existing.id
+    );
+  } else {
+    db.prepare('INSERT INTO picks (user_id, game_id, pick, is_correct) VALUES (?, ?, ?, ?)').run(
+      user_id,
+      game_id,
+      pick,
+      isCorrect
+    );
+  }
+
+  res.json({ ok: true, is_correct: isCorrect });
+});
+
 // POST /api/admin/props  { league, week, season_year, question, locks_at? }
 // Create a free-text yes/no prop question for a given league/week.
 router.post('/props', requireAdmin, (req, res) => {

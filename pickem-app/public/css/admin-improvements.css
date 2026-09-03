@@ -1,0 +1,78 @@
+/* --- Admin panel improvements: highlighting + pick management --- */
+
+:root {
+  --close-accent: #4fb0c9;
+  --close-accent-bright: #7cc9df;
+}
+
+/* Top 25 / close-game highlighting, applied to admin-list-item rows in both
+   the ESPN fetch list and the Manage Picks list. */
+.admin-list-item.row-ranked {
+  border-left: 4px solid var(--gold);
+  background: linear-gradient(90deg, rgba(227, 169, 62, 0.10), transparent 40%);
+}
+.admin-list-item.row-close {
+  border-left: 4px solid var(--close-accent);
+  background: linear-gradient(90deg, rgba(79, 176, 201, 0.12), transparent 40%);
+}
+/* Both flags at once: two-tone border so neither signal is lost. */
+.admin-list-item.row-ranked.row-close {
+  border-left-width: 4px;
+  border-image: linear-gradient(var(--gold), var(--close-accent)) 1;
+  background: linear-gradient(90deg, rgba(227, 169, 62, 0.08), rgba(79, 176, 201, 0.08) 60%, transparent);
+}
+
+.pill.ranked { color: var(--gold-bright); background: rgba(227, 169, 62, 0.15); }
+.pill.close { color: var(--close-accent-bright); background: rgba(79, 176, 201, 0.15); }
+
+/* --- Manage picks panel --- */
+.admin-list-item.manage-pick-game {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.manage-pick-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+.manage-picks-panel {
+  margin-top: 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+.manage-pick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 2px;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--line);
+}
+.manage-pick-row:last-child { border-bottom: none; }
+.manage-pick-row.pick-correct { color: var(--gold-bright); }
+.manage-pick-row.pick-incorrect { color: var(--loss-red); }
+
+.manage-pick-btns { display: flex; gap: 6px; }
+.manage-pick-btn {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+.manage-pick-btn:hover:not(:disabled) { border-color: var(--gold); }
+.manage-pick-btn:disabled { cursor: default; opacity: 0.6; }
+.manage-pick-btn.picked {
+  background: var(--gold);
+  color: var(--turf-dark);
+  border-color: var(--gold);
+  font-weight: 700;
+}
