@@ -9,17 +9,14 @@
    the ESPN fetch list and the Manage Picks list. */
 .admin-list-item.row-ranked {
   border-left: 4px solid var(--gold);
-  background: linear-gradient(90deg, rgba(227, 169, 62, 0.10), transparent 40%);
 }
 .admin-list-item.row-close {
   border-left: 4px solid var(--close-accent);
-  background: linear-gradient(90deg, rgba(79, 176, 201, 0.12), transparent 40%);
 }
 /* Both flags at once: two-tone border so neither signal is lost. */
 .admin-list-item.row-ranked.row-close {
   border-left-width: 4px;
   border-image: linear-gradient(var(--gold), var(--close-accent)) 1;
-  background: linear-gradient(90deg, rgba(227, 169, 62, 0.08), rgba(79, 176, 201, 0.08) 60%, transparent);
 }
 
 .pill.ranked { color: var(--gold-bright); background: rgba(227, 169, 62, 0.15); }
@@ -81,6 +78,34 @@
 }
 .manage-pick-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
 .manage-pick-header-matchup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* --- Floating save bar --- */
+.floating-save-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--charcoal);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  max-width: 92vw;
+}
+.floating-save-text {
+  font-size: 0.85rem;
+  color: var(--chalk-dim);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .floating-save-bar { flex-direction: column; gap: 8px; padding: 12px 14px; }
+  .floating-save-text { white-space: normal; text-align: center; }
+}
 
 /* --- ESPN fetch-list game card: two-line layout with logos, replacing the
    old single crowded line --- */

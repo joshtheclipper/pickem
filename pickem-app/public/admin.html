@@ -55,10 +55,6 @@
     <div id="adminMsg"></div>
     <div id="adminGamesList"></div>
 
-    <div class="admin-actions">
-      <button class="btn" id="saveBtn" style="width:auto" disabled>Save selected games</button>
-    </div>
-
     <div class="section-label" style="margin-top:40px">Manage picks — <span id="managePicksLabel">NFL Week 1</span></div>
     <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
       Set or correct any player's pick on a saved game — including games that have already locked
@@ -89,6 +85,14 @@
     <div id="playersList"></div>
   </div>
 
+  <!-- Floating save bar: appears only while there are unsaved changes to the
+       game selection checkboxes, so the admin can't lose picks by
+       navigating away without noticing. Hidden by default. -->
+  <div id="floatingSaveBar" class="floating-save-bar" style="display:none">
+    <span class="floating-save-text">Unsaved game selection changes</span>
+    <button class="btn" id="floatingSaveBtn" style="width:auto">Save selected games</button>
+  </div>
+
   <script src="/js/api.js"></script>
   <script>
     let league = 'NFL';
@@ -110,6 +114,10 @@
         if (baseline !== !!g.selected) return true;
       }
       return false;
+    }
+
+    function updateFloatingSaveBar() {
+      document.getElementById('floatingSaveBar').style.display = hasUnsavedSelectionChanges() ? 'flex' : 'none';
     }
 
     window.addEventListener('beforeunload', (e) => {
@@ -166,6 +174,20 @@
       loadPlayers();
       refreshAdminView();
     }
+
+    // Guards every link in the top nav (brand logo, Picks, Leaderboard,
+    // Account, Admin) with the same explicit confirm used for league/week
+    // switching. beforeunload is kept below as a fallback for closing the
+    // tab or typing a new URL, but it's unreliable for in-app link clicks
+    // across browsers, so this is the mechanism that actually protects
+    // "leaving to any other page" reliably.
+    document.querySelectorAll('.scorebar a[href]').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        if (!confirmDiscardUnsavedSelection()) {
+          e.preventDefault();
+        }
+      });
+    });
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       if (!confirmDiscardUnsavedSelection()) return;
@@ -298,7 +320,7 @@
         fetchedGames = games.map((g) => ({ ...g, selected: g.included }));
         captureSelectionBaseline();
         renderAdminGames();
-        document.getElementById('saveBtn').disabled = false;
+        updateFloatingSaveBar();
         status.textContent = `Loaded ${games.length} game${games.length === 1 ? '' : 's'} from ESPN`;
       } catch (err) {
         list.innerHTML = '';
@@ -334,12 +356,13 @@
           </label>
           <div class="admin-game-meta">
             <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span>
-            <span>${highlightBadges(g)}${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}</span>
+            <span>${highlightBadges(g)}
           </div>
         `;
         row.querySelector('input').addEventListener('change', (e) => {
           fetchedGames[idx].selected = e.target.checked;
           updateCount();
+          updateFloatingSaveBar();
         });
         list.appendChild(row);
       });
@@ -351,22 +374,29 @@
       document.getElementById('selectedCount').textContent = n ? `${n} selected` : '';
     }
 
-    document.getElementById('saveBtn').addEventListener('click', async () => {
+    async function saveSelectedGames() {
       const msg = document.getElementById('adminMsg');
       const chosen = fetchedGames.filter((g) => g.selected);
       if (chosen.length === 0) {
         msg.innerHTML = '<div class="error-msg">Select at least one game.</div>';
         return;
       }
+      const btn = document.getElementById('floatingSaveBtn');
+      btn.disabled = true;
       try {
         await api.post('/api/admin/select-games', { games: chosen });
         msg.innerHTML = `<div class="ok-msg">Saved ${chosen.length} games for ${league} Week ${week}.</div>`;
         captureSelectionBaseline();
+        updateFloatingSaveBar();
         loadManagePicks();
       } catch (err) {
         msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
       }
-    });
+    }
+
+    document.getElementById('floatingSaveBtn').addEventListener('click', saveSelectedGames);
 
     // --- Manage picks (admin can set/correct any player's pick, any time) ---
     async function loadManagePicks() {
