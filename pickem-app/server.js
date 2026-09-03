@@ -32,10 +32,10 @@ app.listen(PORT, () => {
   console.log(`Pick'em app running at http://localhost:${PORT}`);
 });
 
-// Auto-sync scores every 15 minutes so games get graded without anyone
+// Auto-sync scores every 2 minutes so games get graded without anyone
 // needing to click "Sync Now". Disable by setting DISABLE_CRON=true.
 if (process.env.DISABLE_CRON !== 'true') {
-  cron.schedule('*/15 * * * *', async () => {
+  cron.schedule('*/2 * * * *', async () => {
     try {
       const result = await syncAndGrade();
       if (result.gradedPicks > 0 || result.updatedGames > 0) {
