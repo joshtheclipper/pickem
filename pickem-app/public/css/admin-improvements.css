@@ -57,14 +57,17 @@
 .manage-pick-row.pick-correct { color: var(--gold-bright); }
 .manage-pick-row.pick-incorrect { color: var(--loss-red); }
 
-.manage-pick-btns { display: flex; gap: 6px; }
+.manage-pick-btns { display: flex; gap: 8px; }
 .manage-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--line);
   color: var(--chalk);
   border-radius: var(--radius);
-  padding: 5px 10px;
-  font-size: 0.78rem;
+  padding: 9px 16px;
+  font-size: 0.92rem;
   font-family: 'Inter', sans-serif;
   cursor: pointer;
 }
@@ -75,4 +78,36 @@
   color: var(--turf-dark);
   border-color: var(--gold);
   font-weight: 700;
+}
+.manage-pick-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.manage-pick-header-matchup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* --- ESPN fetch-list game card: two-line layout with logos, replacing the
+   old single crowded line --- */
+.admin-list-item.admin-game-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.admin-game-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.admin-game-label input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--gold); flex-shrink: 0; }
+.admin-game-team { display: flex; align-items: center; gap: 8px; }
+.admin-game-logo { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.admin-game-abbr { font-family: 'Teko', sans-serif; font-size: 1.15rem; letter-spacing: 0.01em; }
+.admin-game-at { color: var(--chalk-dim); font-family: 'Teko', sans-serif; font-size: 1rem; }
+.admin-game-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.78rem;
+  padding-left: 30px; /* aligns under the team names, past the checkbox */
+  flex-wrap: wrap;
 }

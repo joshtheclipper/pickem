@@ -96,6 +96,29 @@
     let year = currentSeasonYear();
     let fetchedGames = []; // games pulled from ESPN, with .selected flag
 
+    // Tracks the last-saved/last-fetched selection state so we can warn the
+    // admin before they navigate away with unsaved checkbox changes.
+    let selectionBaseline = new Map(); // espn_event_id -> was it selected
+
+    function captureSelectionBaseline() {
+      selectionBaseline = new Map(fetchedGames.map((g) => [g.espn_event_id, !!g.selected]));
+    }
+
+    function hasUnsavedSelectionChanges() {
+      for (const g of fetchedGames) {
+        const baseline = selectionBaseline.has(g.espn_event_id) ? selectionBaseline.get(g.espn_event_id) : false;
+        if (baseline !== !!g.selected) return true;
+      }
+      return false;
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (hasUnsavedSelectionChanges()) {
+        e.preventDefault();
+        e.returnValue = ''; // required for the confirmation dialog to appear
+      }
+    });
+
     // Extracts the numeric point spread out of an odds summary string like
     // "BUF -3.5, O/U 47.5" (the first number is always the spread). Used to
     // flag close games (spread of 3 or fewer) for both freshly-fetched ESPN
@@ -145,12 +168,22 @@
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if (!confirmDiscardUnsavedSelection()) return;
       await api.post('/api/auth/logout');
       window.location.href = '/login.html';
     });
 
+    // Switching league/week happens without a page reload, so beforeunload
+    // won't catch it — confirm explicitly before discarding unsaved
+    // checkbox selections in the ESPN fetch list.
+    function confirmDiscardUnsavedSelection() {
+      if (!hasUnsavedSelectionChanges()) return true;
+      return window.confirm('You have unsaved game selections. Switching will discard them — continue?');
+    }
+
     document.querySelectorAll('.tabbar .league-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (!confirmDiscardUnsavedSelection()) return;
         document.querySelectorAll('.tabbar .league-tab').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         league = btn.dataset.league;
@@ -158,8 +191,15 @@
         refreshAdminView();
       });
     });
-    document.getElementById('weekUp').addEventListener('click', () => { week++; weekLabel(); refreshAdminView(); });
-    document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; weekLabel(); refreshAdminView(); } });
+    document.getElementById('weekUp').addEventListener('click', () => {
+      if (!confirmDiscardUnsavedSelection()) return;
+      week++; weekLabel(); refreshAdminView();
+    });
+    document.getElementById('weekDown').addEventListener('click', () => {
+      if (week <= 1) return;
+      if (!confirmDiscardUnsavedSelection()) return;
+      week--; weekLabel(); refreshAdminView();
+    });
     function weekLabel() {
       document.getElementById('weekLabel').textContent = `Week ${week}`;
       document.getElementById('propsSectionLabel').textContent = `${league} Week ${week}`;
@@ -256,6 +296,7 @@
       try {
         const { games } = await api.get(`/api/admin/fetch-games?league=${league}&week=${week}&year=${year}`);
         fetchedGames = games.map((g) => ({ ...g, selected: g.included }));
+        captureSelectionBaseline();
         renderAdminGames();
         document.getElementById('saveBtn').disabled = false;
         status.textContent = `Loaded ${games.length} game${games.length === 1 ? '' : 's'} from ESPN`;
@@ -277,13 +318,24 @@
         const kickoff = new Date(g.start_time);
         const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const row = document.createElement('div');
-        row.className = `admin-list-item ${highlightClasses(g)}`;
+        row.className = `admin-list-item admin-game-card ${highlightClasses(g)}`;
         row.innerHTML = `
-          <label>
+          <label class="admin-game-label">
             <input type="checkbox" ${g.selected ? 'checked' : ''} data-idx="${idx}">
-            <span>${g.away_rank ? `#${g.away_rank} ` : ''}${g.away_team_abbr} @ ${g.home_rank ? `#${g.home_rank} ` : ''}${g.home_team_abbr} — <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span> ${highlightBadges(g)}</span>
+            <span class="admin-game-team">
+              ${g.away_team_logo ? `<img src="${g.away_team_logo}" class="admin-game-logo" alt="">` : ''}
+              <span class="admin-game-abbr">${g.away_rank ? `<span class="rank-badge">#${g.away_rank}</span> ` : ''}${g.away_team_abbr}</span>
+            </span>
+            <span class="admin-game-at">@</span>
+            <span class="admin-game-team">
+              ${g.home_team_logo ? `<img src="${g.home_team_logo}" class="admin-game-logo" alt="">` : ''}
+              <span class="admin-game-abbr">${g.home_rank ? `<span class="rank-badge">#${g.home_rank}</span> ` : ''}${g.home_team_abbr}</span>
+            </span>
           </label>
-          ${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}
+          <div class="admin-game-meta">
+            <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span>
+            <span>${highlightBadges(g)}${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}</span>
+          </div>
         `;
         row.querySelector('input').addEventListener('change', (e) => {
           fetchedGames[idx].selected = e.target.checked;
@@ -309,6 +361,7 @@
       try {
         await api.post('/api/admin/select-games', { games: chosen });
         msg.innerHTML = `<div class="ok-msg">Saved ${chosen.length} games for ${league} Week ${week}.</div>`;
+        captureSelectionBaseline();
         loadManagePicks();
       } catch (err) {
         msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
@@ -343,8 +396,11 @@
       const header = document.createElement('div');
       header.className = 'manage-pick-header';
       header.innerHTML = `
-        <span>
-          ${g.away_rank ? `#${g.away_rank} ` : ''}${g.away_team_abbr} @ ${g.home_rank ? `#${g.home_rank} ` : ''}${g.home_team_abbr}
+        <span class="manage-pick-header-matchup">
+          ${g.away_team_logo ? `<img src="${g.away_team_logo}" class="admin-game-logo" alt="">` : ''}
+          ${g.away_rank ? `#${g.away_rank} ` : ''}${g.away_team_abbr} @
+          ${g.home_team_logo ? `<img src="${g.home_team_logo}" class="admin-game-logo" alt="">` : ''}
+          ${g.home_rank ? `#${g.home_rank} ` : ''}${g.home_team_abbr}
           <span style="color:var(--chalk-dim);font-size:0.78rem"> — ${timeStr}${statusTag}</span>
           ${highlightBadges(g)}
         </span>
@@ -402,11 +458,11 @@
 
       const awayBtn = document.createElement('button');
       awayBtn.className = `manage-pick-btn ${p.pick === 'away' ? 'picked' : ''}`;
-      awayBtn.textContent = g.away_team_abbr;
+      awayBtn.innerHTML = `${g.away_team_logo ? `<img src="${g.away_team_logo}" class="manage-pick-logo" alt="">` : ''}<span>${g.away_team_abbr}</span>`;
 
       const homeBtn = document.createElement('button');
       homeBtn.className = `manage-pick-btn ${p.pick === 'home' ? 'picked' : ''}`;
-      homeBtn.textContent = g.home_team_abbr;
+      homeBtn.innerHTML = `${g.home_team_logo ? `<img src="${g.home_team_logo}" class="manage-pick-logo" alt="">` : ''}<span>${g.home_team_abbr}</span>`;
 
       async function setPick(pick) {
         awayBtn.disabled = true;
