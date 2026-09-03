@@ -1,0 +1,138 @@
+/* --- Admin panel improvements: highlighting + pick management --- */
+
+:root {
+  --close-accent: #4fb0c9;
+  --close-accent-bright: #7cc9df;
+}
+
+/* Top 25 / close-game highlighting, applied to admin-list-item rows in both
+   the ESPN fetch list and the Manage Picks list. */
+.admin-list-item.row-ranked {
+  border-left: 4px solid var(--gold);
+}
+.admin-list-item.row-close {
+  border-left: 4px solid var(--close-accent);
+}
+/* Both flags at once: two-tone border so neither signal is lost. */
+.admin-list-item.row-ranked.row-close {
+  border-left-width: 4px;
+  border-image: linear-gradient(var(--gold), var(--close-accent)) 1;
+}
+
+.pill.ranked { color: var(--gold-bright); background: rgba(227, 169, 62, 0.15); }
+.pill.close { color: var(--close-accent-bright); background: rgba(79, 176, 201, 0.15); }
+
+/* --- Manage picks panel --- */
+.admin-list-item.manage-pick-game {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.manage-pick-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+.manage-picks-panel {
+  margin-top: 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+.manage-pick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 2px;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--line);
+}
+.manage-pick-row:last-child { border-bottom: none; }
+.manage-pick-row.pick-correct { color: var(--gold-bright); }
+.manage-pick-row.pick-incorrect { color: var(--loss-red); }
+
+.manage-pick-btns { display: flex; gap: 8px; }
+.manage-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-size: 0.92rem;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+.manage-pick-btn:hover:not(:disabled) { border-color: var(--gold); }
+.manage-pick-btn:disabled { cursor: default; opacity: 0.6; }
+.manage-pick-btn.picked {
+  background: var(--gold);
+  color: var(--turf-dark);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+.manage-pick-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.manage-pick-header-matchup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* --- Floating save bar --- */
+.floating-save-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--charcoal);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  max-width: 92vw;
+}
+.floating-save-text {
+  font-size: 0.85rem;
+  color: var(--chalk-dim);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .floating-save-bar { flex-direction: column; gap: 8px; padding: 12px 14px; }
+  .floating-save-text { white-space: normal; text-align: center; }
+}
+
+/* --- ESPN fetch-list game card: two-line layout with logos, replacing the
+   old single crowded line --- */
+.admin-list-item.admin-game-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.admin-game-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.admin-game-label input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--gold); flex-shrink: 0; }
+.admin-game-team { display: flex; align-items: center; gap: 8px; }
+.admin-game-logo { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.admin-game-abbr { font-family: 'Teko', sans-serif; font-size: 1.15rem; letter-spacing: 0.01em; }
+.admin-game-at { color: var(--chalk-dim); font-family: 'Teko', sans-serif; font-size: 1rem; }
+.admin-game-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.78rem;
+  padding-left: 30px; /* aligns under the team names, past the checkbox */
+  flex-wrap: wrap;
+}

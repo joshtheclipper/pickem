@@ -3,3 +3,4 @@
 backups/
 .DS_Store
 *.zip
+docker-compose.local.yml
