@@ -37,16 +37,12 @@ router.get('/', requireAuth, (req, res) => {
   res.json({ games: enriched });
 });
 
-// GET /api/games/:id/picks - everyone's pick on a single game, once it's locked
-// Server-side enforced: even a direct API call can't see picks before kickoff.
+// GET /api/games/:id/picks - everyone's pick on a single game.
+// Visible to any logged-in player at any time (not gated on lock/kickoff) —
+// players can see who's picked what before games start, same as after.
 router.get('/:id/picks', requireAuth, (req, res) => {
   const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found' });
-
-  const locked = game.status !== 'scheduled' || new Date(game.start_time) <= new Date();
-  if (!locked) {
-    return res.status(403).json({ error: 'Picks are hidden until this game starts' });
-  }
 
   const picks = db
     .prepare(
