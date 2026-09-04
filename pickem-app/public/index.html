@@ -133,11 +133,16 @@
     document.getElementById('weekUp').addEventListener('click', () => { week++; loadGames(); });
     document.getElementById('weekDown').addEventListener('click', () => { if (week > 1) { week--; loadGames(); } });
 
-    async function loadGames() {
+    // silent=true is used by the live-score poller below — it refreshes the
+    // list in place without flashing the "Loading…" placeholder or wiping
+    // the props section.
+    async function loadGames(silent = false) {
       weekLabel.textContent = `Week ${week}`;
-      gamesList.innerHTML = '<div class="empty">Loading…</div>';
-      picksMsg.innerHTML = '';
-      loadProps();
+      if (!silent) {
+        gamesList.innerHTML = '<div class="empty">Loading…</div>';
+        picksMsg.innerHTML = '';
+        loadProps();
+      }
       try {
         const { games } = await api.get(`/api/games?league=${league}&week=${week}&year=${year}`);
         currentGames = games;
@@ -149,9 +154,18 @@
         gamesList.innerHTML = '';
         games.forEach((g) => gamesList.appendChild(renderGame(g)));
       } catch (err) {
-        gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
+        if (!silent) gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
     }
+
+    // Poll for live score/quarter updates while the picks tab is visible.
+    // Matches the cadence of the server's own ESPN sync, so there's no
+    // point checking more often than that.
+    setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (document.getElementById('picksView').style.display === 'none') return;
+      loadGames(true);
+    }, 30000);
 
     // --- Lock in picks ---
     // A pick only becomes visible to other players once it's locked in (or
@@ -240,17 +254,20 @@
       div.className = 'game';
       if (g.my_pick_correct === 1) div.classList.add('graded-correct');
       if (g.my_pick_correct === 0) div.classList.add('graded-incorrect');
+      if (g.status === 'final') div.classList.add('game-final');
 
       const kickoff = new Date(g.start_time);
       const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
       const statusText = g.status === 'final'
         ? `<span class="status-final">FINAL</span>`
-        : (g.locked
-            ? `<span class="lock">🔒 Locked</span>`
-            : (g.my_pick_locked
-                ? `<span class="lock pick-locked-badge">🔒 Pick locked</span>`
-                : `<span class="lock">Pick open</span>`));
+        : g.status === 'in_progress'
+          ? `<span class="lock live">${g.status_detail || 'In progress'}</span>`
+          : (g.locked
+              ? `<span class="lock">🔒 Locked</span>`
+              : (g.my_pick_locked
+                  ? `<span class="lock pick-locked-badge">🔒 Pick locked</span>`
+                  : `<span class="lock">Pick open</span>`));
 
       const adminEditedBadge = g.my_pick_admin_overridden
         ? '<span class="admin-edited-badge" title="An admin set or corrected this pick">Admin-edited</span>'
