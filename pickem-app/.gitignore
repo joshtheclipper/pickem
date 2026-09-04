@@ -1,7 +1,0 @@
-node_modules/
-.env
-data/
-db/pickem.db
-db/pickem.db-shm
-db/pickem.db-wal
-*.log

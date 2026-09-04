@@ -14,7 +14,7 @@
 
 services:
   pickem:
-    build: ./pickem-app          # path to this project's folder on your host
+    build: ./pickem          # path to the folder you cloned this repo into
     container_name: pickem
     restart: unless-stopped
     environment:

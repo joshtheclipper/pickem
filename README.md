@@ -43,9 +43,9 @@ account required beyond a place to host it.
 
 ```bash
 git clone <this-repo-url>
-cd pickem-app
+cd pickem
 npm install
-cp .env.example .env
+cp samples/.env.example .env
 ```
 
 Open `.env` and set `JWT_SECRET` to a long random string — this signs login sessions. Generate one:
@@ -117,14 +117,14 @@ future code updates to the files that live there.
 
 ### Option 3 — alongside an existing docker-compose stack
 
-`docker-compose.example.yml` is set up for exactly this: dropping the service into a compose file
-you already run, rather than standing up a separate stack.
+`samples/docker-compose.example.yml` is set up for exactly this: dropping the service into a
+compose file you already run, rather than standing up a separate stack.
 
 1. **Place this project's folder next to your existing compose file:**
    ```
    your-docker-dir/
      docker-compose.yml       ← your existing stack
-     pickem-app/               ← this repo
+     pickem/                   ← this repo
    ```
 2. **Add a JWT secret** to the `.env` next to your `docker-compose.yml` (compose reads `${VARS}`
    from it automatically):
@@ -229,8 +229,9 @@ middleware/auth.js      JWT session handling
 services/espn.js        ESPN scoreboard fetch + normalization (scores, ranks, odds)
 services/grading.js     Score sync + pick grading logic
 public/                 Frontend — plain HTML/CSS/JS, no build step
-Dockerfile, .dockerignore, docker-compose.example.yml
-                        Container build + example compose service definitions
+Dockerfile, .dockerignore
+                        Container build definition
+samples/                Example configs to copy from: .env.example, docker-compose.example.yml
 ```
 
 ## Contributing
@@ -241,5 +242,4 @@ contribution process. Issues and pull requests are welcome if you find bugs or w
 
 ## License
 
-No license file is currently included. Add one (e.g. MIT) if you intend to make this repository
-public or want to make its usage terms explicit for others.
+MIT — see [LICENSE](LICENSE).

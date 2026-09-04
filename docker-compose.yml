@@ -1,6 +1,6 @@
 services:
   pickem:
-    build: ./pickem-app          # path to this project's folder on your host
+    build: .          # this repo's root — the app now lives directly here
     container_name: pickem
     restart: unless-stopped
     environment:
