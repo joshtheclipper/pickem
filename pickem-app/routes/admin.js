@@ -242,4 +242,20 @@ router.get('/users', requireAdmin, (req, res) => {
   res.json({ users });
 });
 
+// POST /api/admin/users/remove { id }
+// Permanently deletes a player's account. Their picks and prop picks cascade
+// with it (ON DELETE CASCADE), so this also erases their leaderboard history
+// — the client confirms this with the admin before calling it.
+router.post('/users/remove', requireAdmin, (req, res) => {
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  if (Number(id) === req.user.id) {
+    return res.status(400).json({ error: "You can't delete your own account" });
+  }
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
 module.exports = router;

@@ -106,6 +106,7 @@
     let week = estimateCurrentWeek();
     let year = currentSeasonYear();
     let fetchedGames = []; // games pulled from ESPN, with .selected flag
+    let currentUser = null; // set in init(); used to hide the delete-self option in Players
 
     // Tracks the last-saved/last-fetched selection state so we can warn the
     // admin before they navigate away with unsaved checkbox changes.
@@ -190,6 +191,7 @@
         window.location.href = '/index.html';
         return;
       }
+      currentUser = user;
       document.getElementById('whoami').textContent = user.username;
       loadPlayers();
       refreshAdminView();
@@ -591,11 +593,35 @@
         users.forEach((u) => {
           const row = document.createElement('div');
           row.className = 'admin-list-item';
-          row.innerHTML = `<span>${u.username} ${u.is_admin ? '<span class="pill saved">admin</span>' : ''}</span>`;
+          const isSelf = currentUser && u.id === currentUser.id;
+          row.innerHTML = `
+            <span>${u.username} ${u.is_admin ? '<span class="pill saved">admin</span>' : ''}</span>
+            ${isSelf ? '' : `<button class="btn danger" style="width:auto" data-remove-user="${u.id}" data-username="${u.username}">Delete</button>`}
+          `;
           list.appendChild(row);
+        });
+        list.querySelectorAll('[data-remove-user]').forEach((btn) => {
+          btn.addEventListener('click', () => removePlayer(btn.dataset.removeUser, btn.dataset.username));
         });
       } catch (err) {
         list.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    // Hard delete: cascades to the player's picks and prop picks (see
+    // routes/admin.js), permanently erasing their leaderboard history.
+    // There's no undo, so this is confirmed explicitly rather than folded
+    // into a single click.
+    async function removePlayer(id, username) {
+      const proceed = window.confirm(
+        `Permanently delete ${username}? This removes their account and all of their picks. This cannot be undone.`
+      );
+      if (!proceed) return;
+      try {
+        await api.post('/api/admin/users/remove', { id: Number(id) });
+        loadPlayers();
+      } catch (err) {
+        alert(err.message);
       }
     }
 

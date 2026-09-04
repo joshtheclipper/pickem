@@ -340,6 +340,8 @@ a { color: var(--gold-bright); }
 .btn:hover { background: var(--gold-bright); }
 .btn.secondary { background: transparent; border: 1px solid var(--line); color: var(--chalk); width: auto; font-weight: 500; }
 .btn.secondary:hover { border-color: var(--gold); color: var(--gold); }
+.btn.danger { background: transparent; border: 1px solid var(--loss-red); color: var(--loss-red); width: auto; font-weight: 500; padding: 6px 12px; font-size: 0.82rem; }
+.btn.danger:hover { background: var(--loss-red); color: var(--chalk); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 .switcher { text-align: center; margin-top: 16px; font-size: 0.85rem; color: var(--chalk-dim); }
