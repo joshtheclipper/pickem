@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS picks (
   game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   pick TEXT NOT NULL CHECK (pick IN ('home','away')),
   is_correct INTEGER, -- NULL until graded, then 0 or 1
+  -- Player-initiated "lock in" — separate from the game's own kickoff lock.
+  -- A pick becomes visible to other players (pick-to-see) once either this
+  -- is set, or the game itself has started. See routes/games.js.
+  locked_in INTEGER NOT NULL DEFAULT 0,
+  -- Set when an admin uses the "Manage picks" override to set/change this
+  -- pick on the player's behalf. Cleared again if the player changes the
+  -- pick themselves afterward (only possible if it's still unlocked and
+  -- the game hasn't started) — at that point it's genuinely their own
+  -- choice again. See routes/picks.js and routes/admin.js.
+  admin_overridden INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, game_id)

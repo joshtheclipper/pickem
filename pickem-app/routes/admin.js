@@ -120,7 +120,7 @@ router.get('/games/:id/picks', requireAdmin, (req, res) => {
 
   const rows = db
     .prepare(
-      `SELECT u.id AS user_id, u.username, p.pick, p.is_correct
+      `SELECT u.id AS user_id, u.username, p.pick, p.is_correct, p.admin_overridden
        FROM users u
        LEFT JOIN picks p ON p.user_id = u.id AND p.game_id = ?
        ORDER BY u.username ASC`
@@ -155,13 +155,13 @@ router.post('/picks/edit', requireAdmin, (req, res) => {
 
   const existing = db.prepare('SELECT id FROM picks WHERE user_id = ? AND game_id = ?').get(user_id, game_id);
   if (existing) {
-    db.prepare("UPDATE picks SET pick = ?, is_correct = ?, updated_at = datetime('now') WHERE id = ?").run(
+    db.prepare("UPDATE picks SET pick = ?, is_correct = ?, admin_overridden = 1, updated_at = datetime('now') WHERE id = ?").run(
       pick,
       isCorrect,
       existing.id
     );
   } else {
-    db.prepare('INSERT INTO picks (user_id, game_id, pick, is_correct) VALUES (?, ?, ?, ?)').run(
+    db.prepare('INSERT INTO picks (user_id, game_id, pick, is_correct, admin_overridden) VALUES (?, ?, ?, ?, 1)').run(
       user_id,
       game_id,
       pick,
