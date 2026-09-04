@@ -76,7 +76,7 @@
 
     <div class="section-label" style="margin-top:40px">Scoring</div>
     <div class="sync-strip">
-      <span>Scores auto-sync every 2 minutes. You can also trigger it manually.</span>
+      <span>Scores auto-sync every 15 minutes. You can also trigger it manually.</span>
       <button class="btn secondary" id="syncBtn">Sync now</button>
     </div>
     <div id="syncMsg"></div>
@@ -85,12 +85,19 @@
     <div id="playersList"></div>
   </div>
 
-  <!-- Floating save bar: appears only while there are unsaved changes to the
-       game selection checkboxes, so the admin can't lose picks by
-       navigating away without noticing. Hidden by default. -->
-  <div id="floatingSaveBar" class="floating-save-bar" style="display:none">
-    <span class="floating-save-text">Unsaved game selection changes</span>
-    <button class="btn" id="floatingSaveBtn" style="width:auto">Save selected games</button>
+  <!-- Floating action bars: appear only while there are unsaved changes,
+       so the admin can't lose game selections or pick corrections by
+       navigating away without noticing. Both hidden by default; stacked so
+       they can be visible at the same time without overlapping. -->
+  <div class="floating-bars-stack">
+    <div id="floatingSaveBar" class="floating-save-bar" style="display:none">
+      <span class="floating-save-text">Unsaved game selection changes</span>
+      <button class="btn" id="floatingSaveBtn" style="width:auto">Save selected games</button>
+    </div>
+    <div id="manageEditsBar" class="floating-save-bar" style="display:none">
+      <span class="floating-save-text">You have unsaved edits</span>
+      <button class="btn" id="manageEditsBtn" style="width:auto">Save edits</button>
+    </div>
   </div>
 
   <script src="/js/api.js"></script>
@@ -104,6 +111,11 @@
     // admin before they navigate away with unsaved checkbox changes.
     let selectionBaseline = new Map(); // espn_event_id -> was it selected
 
+    // Staged pick corrections from the Manage Picks panel — keyed by
+    // "gameId:userId" — held here until the admin explicitly saves them,
+    // same "commit as a deliberate step" pattern as player lock-in.
+    let pendingAdminEdits = new Map();
+
     function captureSelectionBaseline() {
       selectionBaseline = new Map(fetchedGames.map((g) => [g.espn_event_id, !!g.selected]));
     }
@@ -116,12 +128,20 @@
       return false;
     }
 
+    function hasAnyUnsavedChanges() {
+      return hasUnsavedSelectionChanges() || pendingAdminEdits.size > 0;
+    }
+
     function updateFloatingSaveBar() {
       document.getElementById('floatingSaveBar').style.display = hasUnsavedSelectionChanges() ? 'flex' : 'none';
     }
 
+    function updateManageEditsBar() {
+      document.getElementById('manageEditsBar').style.display = pendingAdminEdits.size > 0 ? 'flex' : 'none';
+    }
+
     window.addEventListener('beforeunload', (e) => {
-      if (hasUnsavedSelectionChanges()) {
+      if (hasAnyUnsavedChanges()) {
         e.preventDefault();
         e.returnValue = ''; // required for the confirmation dialog to appear
       }
@@ -195,12 +215,18 @@
       window.location.href = '/login.html';
     });
 
-    // Switching league/week happens without a page reload, so beforeunload
-    // won't catch it — confirm explicitly before discarding unsaved
-    // checkbox selections in the ESPN fetch list.
+    // Switching league/week (or navigating away) happens without a page
+    // reload in most cases, so beforeunload won't catch it — confirm
+    // explicitly before discarding either unsaved checkbox selections or
+    // unsaved pick corrections.
     function confirmDiscardUnsavedSelection() {
-      if (!hasUnsavedSelectionChanges()) return true;
-      return window.confirm('You have unsaved game selections. Switching will discard them — continue?');
+      if (!hasAnyUnsavedChanges()) return true;
+      const proceed = window.confirm('You have unsaved changes. Leaving will discard them — continue?');
+      if (proceed) {
+        pendingAdminEdits.clear();
+        updateManageEditsBar();
+      }
+      return proceed;
     }
 
     document.querySelectorAll('.tabbar .league-tab').forEach((btn) => {
@@ -356,7 +382,7 @@
           </label>
           <div class="admin-game-meta">
             <span style="color:var(--chalk-dim)">${timeStr}${g.odds_summary ? ` · ${g.odds_summary}` : ''}</span>
-            <span>${highlightBadges(g)}
+            <span>${highlightBadges(g)}${g.already_saved ? '<span class="pill saved">saved</span>' : '<span class="pill">new</span>'}</span>
           </div>
         `;
         row.querySelector('input').addEventListener('change', (e) => {
@@ -397,6 +423,31 @@
     }
 
     document.getElementById('floatingSaveBtn').addEventListener('click', saveSelectedGames);
+
+    // --- Save staged pick corrections from the Manage Picks panel ---
+    async function saveManageEdits() {
+      const msg = document.getElementById('adminMsg');
+      const edits = Array.from(pendingAdminEdits.values());
+      if (edits.length === 0) return;
+
+      const btn = document.getElementById('manageEditsBtn');
+      btn.disabled = true;
+      try {
+        for (const e of edits) {
+          await api.post('/api/admin/picks/edit', { game_id: e.game_id, user_id: e.user_id, pick: e.pick });
+        }
+        pendingAdminEdits.clear();
+        updateManageEditsBar();
+        msg.innerHTML = `<div class="ok-msg">Saved ${edits.length} pick edit${edits.length === 1 ? '' : 's'}.</div>`;
+        loadManagePicks(); // refresh from server so grading/badges reflect the saved state
+      } catch (err) {
+        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('manageEditsBtn').addEventListener('click', saveManageEdits);
 
     // --- Manage picks (admin can set/correct any player's pick, any time) ---
     async function loadManagePicks() {
@@ -481,6 +532,13 @@
 
       const label = document.createElement('span');
       label.textContent = p.username;
+      if (p.admin_overridden) {
+        const mark = document.createElement('span');
+        mark.className = 'admin-edited-mark';
+        mark.title = 'You previously set/corrected this pick';
+        mark.textContent = ' ✎';
+        label.appendChild(mark);
+      }
       row.appendChild(label);
 
       const btnWrap = document.createElement('span');
@@ -494,22 +552,14 @@
       homeBtn.className = `manage-pick-btn ${p.pick === 'home' ? 'picked' : ''}`;
       homeBtn.innerHTML = `${g.home_team_logo ? `<img src="${g.home_team_logo}" class="manage-pick-logo" alt="">` : ''}<span>${g.home_team_abbr}</span>`;
 
-      async function setPick(pick) {
-        awayBtn.disabled = true;
-        homeBtn.disabled = true;
-        try {
-          const result = await api.post('/api/admin/picks/edit', { game_id: g.id, user_id: p.user_id, pick });
-          awayBtn.classList.toggle('picked', pick === 'away');
-          homeBtn.classList.toggle('picked', pick === 'home');
-          row.classList.remove('pick-correct', 'pick-incorrect');
-          if (result.is_correct === 1) row.classList.add('pick-correct');
-          if (result.is_correct === 0) row.classList.add('pick-incorrect');
-        } catch (err) {
-          document.getElementById('adminMsg').innerHTML = `<div class="error-msg">${err.message}</div>`;
-        } finally {
-          awayBtn.disabled = false;
-          homeBtn.disabled = false;
-        }
+      function setPick(pick) {
+        awayBtn.classList.toggle('picked', pick === 'away');
+        homeBtn.classList.toggle('picked', pick === 'home');
+        // Not-yet-graded status is unknown until this is actually saved —
+        // clear any stale correct/incorrect coloring in the meantime.
+        row.classList.remove('pick-correct', 'pick-incorrect');
+        pendingAdminEdits.set(`${g.id}:${p.user_id}`, { game_id: g.id, user_id: p.user_id, pick });
+        updateManageEditsBar();
       }
 
       awayBtn.addEventListener('click', () => setPick('away'));

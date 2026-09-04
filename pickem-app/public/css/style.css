@@ -171,7 +171,7 @@ a { color: var(--gold-bright); }
   transition: border-color 0.12s, background 0.12s;
 }
 .team-btn:hover:not(:disabled) { border-color: var(--gold); }
-.team-btn:disabled { cursor: default; }
+.team-btn:disabled { cursor: default; opacity: 0.75; }
 .team-btn.picked { background: var(--gold); color: var(--turf-dark); border-color: var(--gold); font-weight: 600; }
 .team-btn.right-side { flex-direction: row-reverse; text-align: right; }
 .team-btn img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
@@ -491,4 +491,39 @@ a { color: var(--gold-bright); }
 @media (max-width: 480px) {
   .floating-save-bar { flex-direction: column; gap: 8px; padding: 12px 14px; }
   .floating-save-text { white-space: normal; text-align: center; }
+}
+
+/* --- Admin-edited pick indicator --- */
+/* Shown at the bottom-right of a player's own game card (next to the
+   reveal button) when an admin used their override to set/correct that
+   pick, and as a small inline badge to the left of a name's team pick in
+   the picks-reveal list. */
+.admin-edited-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--loss-red);
+  background: rgba(193, 68, 60, 0.15);
+  border: 1px solid rgba(193, 68, 60, 0.4);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+.admin-edited-badge-inline {
+  font-size: 0.62rem;
+  padding: 1px 6px;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+.admin-edited-mark {
+  color: var(--loss-red);
+  font-size: 0.78rem;
+  cursor: help;
+}
+
+.picks-reveal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }

@@ -252,6 +252,10 @@
                 ? `<span class="lock pick-locked-badge">🔒 Pick locked</span>`
                 : `<span class="lock">Pick open</span>`));
 
+      const adminEditedBadge = g.my_pick_admin_overridden
+        ? '<span class="admin-edited-badge" title="An admin set or corrected this pick">Admin-edited</span>'
+        : '';
+
       div.innerHTML = `
         <div class="game-meta">
           <span>${timeStr}${g.odds_summary ? ` &middot; ${g.odds_summary}` : ''}</span>
@@ -280,7 +284,10 @@
       const revealWrap = document.createElement('div');
       revealWrap.className = 'picks-reveal-wrap';
       revealWrap.innerHTML = `
-        <button class="reveal-btn">Show picks ▾</button>
+        <div class="picks-reveal-footer">
+          <button class="reveal-btn">Show picks ▾</button>
+          ${adminEditedBadge}
+        </div>
         <div class="picks-reveal" style="display:none"></div>
       `;
       div.appendChild(revealWrap);
@@ -314,7 +321,10 @@
             if (p.is_correct === 1) row.classList.add('pick-correct');
             if (p.is_correct === 0) row.classList.add('pick-incorrect');
             const teamLabel = p.pick === 'home' ? (g.home_team_abbr || g.home_team) : (g.away_team_abbr || g.away_team);
-            row.innerHTML = `<span>${p.username}</span><span class="pick-row-team">${teamLabel}</span>`;
+            const adminMark = p.admin_overridden
+              ? '<span class="admin-edited-badge admin-edited-badge-inline">Admin-edited</span> '
+              : '';
+            row.innerHTML = `<span>${p.username}</span><span class="pick-row-team">${adminMark}${teamLabel}</span>`;
             revealPanel.appendChild(row);
           });
         } catch (err) {

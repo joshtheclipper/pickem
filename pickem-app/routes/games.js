@@ -20,7 +20,7 @@ router.get('/', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT game_id, pick, is_correct, locked_in FROM picks WHERE user_id = ? AND game_id IN (${games.map(() => '?').join(',') || 'NULL'})`
+      `SELECT game_id, pick, is_correct, locked_in, admin_overridden FROM picks WHERE user_id = ? AND game_id IN (${games.map(() => '?').join(',') || 'NULL'})`
     )
     .all(req.user.id, ...games.map((g) => g.id));
 
@@ -33,6 +33,7 @@ router.get('/', requireAuth, (req, res) => {
     my_pick: pickMap[g.id] ? pickMap[g.id].pick : null,
     my_pick_correct: pickMap[g.id] ? pickMap[g.id].is_correct : null,
     my_pick_locked: pickMap[g.id] ? !!pickMap[g.id].locked_in : false,
+    my_pick_admin_overridden: pickMap[g.id] ? !!pickMap[g.id].admin_overridden : false,
   }));
 
   res.json({ games: enriched });
@@ -66,7 +67,7 @@ router.get('/:id/picks', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT u.username, p.pick, p.is_correct
+      `SELECT u.username, p.pick, p.is_correct, p.admin_overridden
        FROM picks p JOIN users u ON u.id = p.user_id
        WHERE p.game_id = ?
        ORDER BY u.username ASC`

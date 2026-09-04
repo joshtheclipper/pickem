@@ -79,13 +79,19 @@
 .manage-pick-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
 .manage-pick-header-matchup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
-/* --- Floating save bar --- */
-.floating-save-bar {
+/* --- Floating action bars (stackable — game-selection save + pick-edit save) --- */
+.floating-bars-stack {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.floating-save-bar {
   display: flex;
   align-items: center;
   gap: 14px;

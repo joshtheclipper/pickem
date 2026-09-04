@@ -27,7 +27,10 @@ router.post('/', requireAuth, (req, res) => {
   }
 
   if (existing) {
-    db.prepare("UPDATE picks SET pick = ?, updated_at = datetime('now') WHERE id = ?").run(pick, existing.id);
+    // If an admin previously set/corrected this pick and the player is now
+    // changing it themselves (only possible before it's locked and before
+    // kickoff), it's genuinely their own choice again — clear the flag.
+    db.prepare("UPDATE picks SET pick = ?, admin_overridden = 0, updated_at = datetime('now') WHERE id = ?").run(pick, existing.id);
   } else {
     db.prepare('INSERT INTO picks (user_id, game_id, pick) VALUES (?, ?, ?)').run(req.user.id, game_id, pick);
   }
