@@ -24,7 +24,7 @@ async function syncAndGrade() {
     }
 
     const updateStmt = db.prepare(`
-      UPDATE games SET home_score = ?, away_score = ?, status = ?, winner = ?,
+      UPDATE games SET home_score = ?, away_score = ?, status = ?, status_detail = ?, winner = ?,
         home_rank = ?, away_rank = ?, odds_summary = ?
       WHERE espn_event_id = ? AND league = ? AND season_year = ?
     `);
@@ -34,6 +34,7 @@ async function syncAndGrade() {
         ev.home_score,
         ev.away_score,
         ev.status,
+        ev.status_detail,
         ev.winner,
         ev.home_rank,
         ev.away_rank,

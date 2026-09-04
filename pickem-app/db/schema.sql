@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS games (
   home_score INTEGER,
   away_score INTEGER,
   status TEXT NOT NULL DEFAULT 'scheduled', -- scheduled | in_progress | final
+  status_detail TEXT, -- live quarter/clock text from ESPN, e.g. "8:23 - 3rd Quarter"; only meaningful while in_progress
   winner TEXT, -- 'home' | 'away' | 'tie' | NULL
   home_rank INTEGER, -- AP Top 25 rank (1-25), NULL if unranked
   away_rank INTEGER,

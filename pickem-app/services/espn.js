@@ -49,6 +49,10 @@ function normalizeEvent(ev, league, seasonYear, week) {
     else if (statusType.state === 'in') status = 'in_progress';
   }
 
+  // e.g. "8:23 - 3rd Quarter"; only used client-side while status is
+  // in_progress, but harmless to store otherwise.
+  const status_detail = statusType ? statusType.shortDetail : null;
+
   let winner = null;
   if (status === 'final') {
     const homeScore = Number(home.score);
@@ -91,6 +95,7 @@ function normalizeEvent(ev, league, seasonYear, week) {
     home_score: home.score !== undefined ? Number(home.score) : null,
     away_score: away.score !== undefined ? Number(away.score) : null,
     status,
+    status_detail,
     winner,
     home_rank,
     away_rank,
