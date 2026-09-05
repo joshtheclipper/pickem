@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pick'em Challenge</title>
+<!-- Paints the dark background immediately, before style.css (which chains
+     to a remote Google Fonts @import) finishes loading — otherwise every
+     navigation between pages flashes white while that chain resolves.
+     Purely cosmetic — no JS, no interaction with the tab-switching logic. -->
+<style>html{background:#12261c}</style>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -96,6 +101,7 @@
       document.getElementById('whoami').textContent = user.username;
       if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
       loadGames();
+      if (initialTab === 'board') loadBoard();
     }
 
     // Confirms before any in-app navigation away from picks (Leaderboard tab,
@@ -106,6 +112,18 @@
       if (!hasUnlockedPicks()) return true;
       return window.confirm("You have picks that aren't locked in yet. Leave this page anyway?");
     }
+    // Other pages (Account, Admin) link back here to land on a specific tab
+    // via ?tab=board, since — unlike Picks/Leaderboard within this page —
+    // they can't just call show('board') directly. Applied immediately
+    // (before init()/any async work) so there's no flash of the Picks view.
+    // The query string is then stripped so a later refresh doesn't keep
+    // forcing the Leaderboard tab after the player has switched away from it.
+    const initialTabParams = new URLSearchParams(window.location.search);
+    const initialTab = initialTabParams.get('tab') === 'board' ? 'board' : 'picks';
+    if (initialTabParams.has('tab')) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+    show(initialTab);
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       if (!confirmLeaveIfUnlocked()) return;

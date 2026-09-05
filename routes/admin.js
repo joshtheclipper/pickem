@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const db = require('../db/db');
 const { requireAdmin } = require('../middleware/auth');
 const { fetchScoreboard } = require('../services/espn');
@@ -257,6 +258,51 @@ router.post('/users/remove', requireAdmin, (req, res) => {
   const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// POST /api/admin/users/set-pin  { id, new_pin }
+// Resets a player's PIN on their behalf (e.g. they forgot it) — unlike the
+// self-service Account page, this doesn't require knowing the current PIN.
+router.post('/users/set-pin', requireAdmin, (req, res) => {
+  const { id, new_pin } = req.body || {};
+  if (!id || !new_pin) {
+    return res.status(400).json({ error: 'id and new_pin are required' });
+  }
+  if (String(new_pin).length < 4) {
+    return res.status(400).json({ error: 'PIN must be at least 4 characters' });
+  }
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const pinHash = bcrypt.hashSync(String(new_pin), 10);
+  db.prepare('UPDATE users SET pin_hash = ? WHERE id = ?').run(pinHash, id);
+  res.json({ ok: true });
+});
+
+// POST /api/admin/users/make-admin  { id }
+// Only one admin exists at a time, so this demotes whoever currently holds
+// it and promotes the target user in the same transaction. Note this
+// doesn't invalidate any already-issued JWTs — is_admin is baked into the
+// token at login (see middleware/auth.js), so both the outgoing and
+// incoming admin need to log out and back in for their session to reflect
+// the change. The caller (the current admin) is logged out client-side
+// immediately after this succeeds to avoid running on a stale token.
+router.post('/users/make-admin', requireAdmin, (req, res) => {
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  if (Number(id) === req.user.id) {
+    return res.status(400).json({ error: "You're already the admin" });
+  }
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE users SET is_admin = 0 WHERE is_admin = 1').run();
+    db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(id);
+  });
+  tx();
+
   res.json({ ok: true });
 });
 
