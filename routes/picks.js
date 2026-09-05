@@ -38,6 +38,33 @@ router.post('/', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// DELETE /api/picks  { game_id }
+// Clear an unlocked pick entirely — lets a player deselect a team they
+// tapped by mistake instead of being stuck with one side or the other.
+router.delete('/', requireAuth, (req, res) => {
+  const { game_id } = req.body || {};
+  if (!game_id) return res.status(400).json({ error: 'game_id is required' });
+
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(game_id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  if (game.status !== 'scheduled' || new Date(game.start_time) <= new Date()) {
+    return res.status(400).json({ error: 'Picks are locked for this game (it has started or finished)' });
+  }
+
+  const existing = db
+    .prepare('SELECT id, locked_in FROM picks WHERE user_id = ? AND game_id = ?')
+    .get(req.user.id, game_id);
+
+  if (existing && existing.locked_in) {
+    return res.status(400).json({ error: 'This pick is locked in and can no longer be changed' });
+  }
+
+  if (existing) db.prepare('DELETE FROM picks WHERE id = ?').run(existing.id);
+
+  res.json({ ok: true });
+});
+
 // POST /api/picks/lock  { league, week, year }
 // "Lock in" every pick the player has made in this league/week that isn't
 // already locked. Locking a pick on a game is what unlocks pick-to-see for

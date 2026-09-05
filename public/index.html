@@ -360,15 +360,22 @@
       const prevYes = yesBtn.classList.contains('picked');
       const prevNo = noBtn.classList.contains('picked');
 
-      yesBtn.classList.toggle('picked', answer === 'yes');
-      noBtn.classList.toggle('picked', answer === 'no');
+      // Tapping the answer that's already selected clears it.
+      const deselect = (answer === 'yes' && prevYes) || (answer === 'no' && prevNo);
+
+      yesBtn.classList.toggle('picked', !deselect && answer === 'yes');
+      noBtn.classList.toggle('picked', !deselect && answer === 'no');
       picksMsg.innerHTML = '';
 
       try {
-        await api.post('/api/props/pick', { prop_id: propId, answer });
+        if (deselect) {
+          await api.del('/api/props/pick', { prop_id: propId });
+        } else {
+          await api.post('/api/props/pick', { prop_id: propId, answer });
+        }
         const cached = currentProps.find((p) => p.id === propId);
         if (cached) {
-          cached.my_answer = answer;
+          cached.my_answer = deselect ? null : answer;
           cached.my_answer_locked = false;
           updateLockBar();
         }
@@ -385,6 +392,7 @@
       if (g.my_pick_correct === 1) div.classList.add('graded-correct');
       if (g.my_pick_correct === 0) div.classList.add('graded-incorrect');
       if (g.status === 'final') div.classList.add('game-final');
+      if (g.status === 'in_progress') div.classList.add('game-live');
 
       const kickoff = new Date(g.start_time);
       const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -502,15 +510,23 @@
       const prevAway = awayBtn.classList.contains('picked');
       const prevHome = homeBtn.classList.contains('picked');
 
-      awayBtn.classList.toggle('picked', pick === 'away');
-      homeBtn.classList.toggle('picked', pick === 'home');
+      // Tapping the side that's already selected clears the pick, so a
+      // misclick doesn't force you to leave one team or the other picked.
+      const deselect = (pick === 'away' && prevAway) || (pick === 'home' && prevHome);
+
+      awayBtn.classList.toggle('picked', !deselect && pick === 'away');
+      homeBtn.classList.toggle('picked', !deselect && pick === 'home');
       picksMsg.innerHTML = '';
 
       try {
-        await api.post('/api/picks', { game_id: gameId, pick });
+        if (deselect) {
+          await api.del('/api/picks', { game_id: gameId });
+        } else {
+          await api.post('/api/picks', { game_id: gameId, pick });
+        }
         const cached = currentGames.find((g) => g.id === gameId);
         if (cached) {
-          cached.my_pick = pick;
+          cached.my_pick = deselect ? null : pick;
           cached.my_pick_locked = false;
           updateLockBar();
         }

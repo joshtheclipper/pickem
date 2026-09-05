@@ -135,13 +135,18 @@ a { color: var(--gold-bright); }
 .game {
   background: var(--turf);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--line);
   border-radius: var(--radius);
   margin-bottom: 10px;
   overflow: hidden;
 }
-.game.graded-correct { border-left-color: var(--win-green); }
-.game.graded-incorrect { border-left-color: var(--loss-red); }
+/* Finished games sit back visually — a darker ticket so they're easy to
+   tell apart from games that haven't kicked off yet. */
+.game.game-final { background: #183524; }
+/* Live games get a highlighted border so they jump out of the list. */
+.game.game-live {
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 10px rgba(240, 194, 106, 0.25);
+}
 
 .game-meta {
   display: flex; justify-content: space-between;
@@ -187,6 +192,11 @@ a { color: var(--gold-bright); }
 .team-btn:disabled { cursor: default; }
 .game.game-final .team-btn:disabled { opacity: 0.75; }
 .team-btn.picked { background: var(--gold); color: var(--turf-dark); border-color: var(--gold); font-weight: 600; }
+/* Once the game is graded, the picked button reflects the outcome: green
+   for a correct pick, red for a wrong one, instead of staying gold. */
+.game.graded-correct .team-btn.picked { background: var(--win-green); border-color: var(--win-green); }
+.game.graded-incorrect .team-btn.picked { background: var(--loss-red); border-color: var(--loss-red); color: var(--chalk); }
+.game.graded-incorrect .team-btn.picked .rank-badge { color: var(--chalk); }
 .team-btn.right-side { flex-direction: row-reverse; text-align: right; }
 .team-btn img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .team-btn .abbr { font-family: 'Teko', sans-serif; font-size: 1.15rem; }
@@ -235,13 +245,10 @@ a { color: var(--gold-bright); }
   position: relative;
   background: var(--charcoal);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--gold);
   border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 10px;
 }
-.prop.graded-correct { border-left-color: var(--win-green); }
-.prop.graded-incorrect { border-left-color: var(--loss-red); }
 .prop-question { font-size: 0.95rem; margin-bottom: 10px; line-height: 1.4; }
 .prop-choices { display: flex; gap: 8px; }
 .prop-btn {
@@ -262,6 +269,9 @@ a { color: var(--gold-bright); }
    merely locked (pre-grade), they should look the same as always-open. */
 .prop.graded .prop-btn:disabled { opacity: 0.75; }
 .prop-btn.picked { background: var(--gold); color: var(--turf-dark); border-color: var(--gold); font-weight: 700; }
+/* Graded outcome coloring, matching the game pick buttons. */
+.prop.graded-correct .prop-btn.picked { background: var(--win-green); border-color: var(--win-green); }
+.prop.graded-incorrect .prop-btn.picked { background: var(--loss-red); border-color: var(--loss-red); color: var(--chalk); }
 .prop-status { font-size: 0.7rem; color: var(--chalk-dim); margin-bottom: 8px; }
 .prop-pick-locked-badge {
   position: absolute;

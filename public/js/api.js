@@ -17,6 +17,7 @@ const api = {
   },
   get(url) { return this._req('GET', url); },
   post(url, body) { return this._req('POST', url, body); },
+  del(url, body) { return this._req('DELETE', url, body); },
 };
 
 async function requireLogin() {
