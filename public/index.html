@@ -96,7 +96,21 @@
       document.getElementById('whoami').textContent = user.username;
       if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
       loadGames();
+      if (initialTab === 'board') loadBoard();
     }
+
+    // Other pages (Account, Admin) link back here to land on a specific tab
+    // via ?tab=board, since — unlike Picks/Leaderboard within this page —
+    // they can't just call show('board') directly. Applied immediately
+    // (before init()/any async work) so there's no flash of the Picks view.
+    // The query string is then stripped so a later refresh doesn't keep
+    // forcing the Leaderboard tab after the player has switched away from it.
+    const initialTabParams = new URLSearchParams(window.location.search);
+    const initialTab = initialTabParams.get('tab') === 'board' ? 'board' : 'picks';
+    if (initialTabParams.has('tab')) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+    show(initialTab);
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       await api.post('/api/auth/logout');
