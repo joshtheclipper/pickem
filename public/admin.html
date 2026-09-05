@@ -28,15 +28,9 @@
   </div>
 
   <div class="wrap">
-    <h2 style="margin:26px 0 4px">Set the weekly slate</h2>
-    <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:18px">
-      Switching league or week automatically pulls the latest schedule from ESPN. Choose the
-      10–15 games for the challenge and save. <span class="pill ranked">Top 25</span> and
-      <span class="pill close">Close game</span> (spread of 3 or fewer) are flagged to help you
-      spot notable matchups.
-    </div>
+    <h2 style="margin:26px 0 18px">Admin</h2>
 
-    <div class="tabbar">
+    <div class="tabbar" id="leagueTabbar">
       <button class="league-tab active" data-league="NFL">NFL</button>
       <button class="league-tab" data-league="NCAAF">NCAAF</button>
       <div class="week-nav">
@@ -46,43 +40,59 @@
       </div>
     </div>
 
-    <div class="admin-actions" style="margin-bottom:16px">
-      <button class="btn secondary" id="fetchBtn">Refresh from ESPN</button>
-      <span id="fetchStatus" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem"></span>
-      <span id="selectedCount" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem;margin-left:auto"></span>
+    <div class="tabbar" id="adminSubtabs">
+      <button class="league-tab active" data-admin-tab="picks">Picks</button>
+      <button class="league-tab" data-admin-tab="props">Props</button>
+      <button class="league-tab" data-admin-tab="manage">Manage Picks</button>
+      <button class="league-tab" data-admin-tab="players">Players</button>
     </div>
 
-    <div id="adminMsg"></div>
-    <div id="adminGamesList"></div>
-
-    <div class="section-label" style="margin-top:40px">Manage picks — <span id="managePicksLabel">NFL Week 1</span></div>
-    <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
-      Set or correct any player's pick on a saved game — including games that have already locked
-      or gone final. Editing a graded game re-grades that pick immediately.
-    </div>
-    <div id="managePicksList"></div>
-
-    <div class="section-label" style="margin-top:40px">Prop questions — <span id="propsSectionLabel">NFL Week 1</span></div>
-    <div class="prop-form">
-      <textarea id="propQuestion" placeholder="e.g. Will there be a game-winning score in the final 2 minutes this week?"></textarea>
-      <div class="field" style="max-width:280px">
-        <label for="propLockTime">Locks at (optional)</label>
-        <input type="datetime-local" id="propLockTime">
+    <div id="adminTabPicks" class="admin-tab-panel">
+      <h2 style="margin:20px 0 4px">Set the weekly slate</h2>
+      <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:18px">
+        Switching league or week automatically pulls the latest schedule from ESPN. Choose the
+        10–15 games for the challenge and save. <span class="pill ranked">Top 25</span> and
+        <span class="pill close">Close game</span> (spread of 3 or fewer) are flagged to help you
+        spot notable matchups.
       </div>
-      <button class="btn secondary" id="addPropBtn" style="width:auto">Add prop question</button>
-    </div>
-    <div id="propsMsg"></div>
-    <div id="adminPropsList"></div>
 
-    <div class="section-label" style="margin-top:40px">Scoring</div>
-    <div class="sync-strip">
-      <span>Scores auto-sync every 15 minutes. You can also trigger it manually.</span>
-      <button class="btn secondary" id="syncBtn">Sync now</button>
-    </div>
-    <div id="syncMsg"></div>
+      <div class="admin-actions" style="margin-bottom:16px">
+        <button class="btn secondary" id="fetchBtn">Refresh from ESPN</button>
+        <span id="fetchStatus" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem"></span>
+        <span id="selectedCount" style="align-self:center;color:var(--chalk-dim);font-size:0.85rem;margin-left:auto"></span>
+      </div>
 
-    <div class="section-label">Players</div>
-    <div id="playersList"></div>
+      <div id="adminMsg"></div>
+      <div id="adminGamesList"></div>
+    </div>
+
+    <div id="adminTabProps" class="admin-tab-panel" style="display:none">
+      <div class="section-label" style="margin-top:20px">Prop questions — <span id="propsSectionLabel">NFL Week 1</span></div>
+      <div class="prop-form">
+        <textarea id="propQuestion" placeholder="e.g. Will there be a game-winning score in the final 2 minutes this week?"></textarea>
+        <div class="field" style="max-width:280px">
+          <label for="propLockTime">Locks at (optional)</label>
+          <input type="datetime-local" id="propLockTime">
+        </div>
+        <button class="btn secondary" id="addPropBtn" style="width:auto">Add prop question</button>
+      </div>
+      <div id="propsMsg"></div>
+      <div id="adminPropsList"></div>
+    </div>
+
+    <div id="adminTabManage" class="admin-tab-panel" style="display:none">
+      <div class="section-label" style="margin-top:20px">Manage picks — <span id="managePicksLabel">NFL Week 1</span></div>
+      <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
+        Set or correct any player's pick on a saved game — including games that have already locked
+        or gone final. Editing a graded game re-grades that pick immediately.
+      </div>
+      <div id="managePicksList"></div>
+    </div>
+
+    <div id="adminTabPlayers" class="admin-tab-panel" style="display:none">
+      <div class="section-label" style="margin-top:20px">Players</div>
+      <div id="playersList"></div>
+    </div>
   </div>
 
   <!-- Floating action bars: appear only while there are unsaved changes,
@@ -231,15 +241,33 @@
       return proceed;
     }
 
-    document.querySelectorAll('.tabbar .league-tab').forEach((btn) => {
+    document.querySelectorAll('#leagueTabbar .league-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         if (!confirmDiscardUnsavedSelection()) return;
-        document.querySelectorAll('.tabbar .league-tab').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('#leagueTabbar .league-tab').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         league = btn.dataset.league;
         weekLabel();
         refreshAdminView();
       });
+    });
+
+    // --- Admin subtabs (Picks / Props / Manage Picks / Players) ---
+    // Pure display toggling — fetchedGames/pendingAdminEdits/selectionBaseline
+    // stay live in memory regardless of which panel is visible, so the
+    // floating save/edit bars (fixed-position, driven by that same state)
+    // keep working untouched no matter which subtab is active.
+    function showAdminTab(which) {
+      document.getElementById('adminTabPicks').style.display = which === 'picks' ? '' : 'none';
+      document.getElementById('adminTabProps').style.display = which === 'props' ? '' : 'none';
+      document.getElementById('adminTabManage').style.display = which === 'manage' ? '' : 'none';
+      document.getElementById('adminTabPlayers').style.display = which === 'players' ? '' : 'none';
+      document.querySelectorAll('#adminSubtabs .league-tab').forEach((b) => {
+        b.classList.toggle('active', b.dataset.adminTab === which);
+      });
+    }
+    document.querySelectorAll('#adminSubtabs .league-tab').forEach((btn) => {
+      btn.addEventListener('click', () => showAdminTab(btn.dataset.adminTab));
     });
     document.getElementById('weekUp').addEventListener('click', () => {
       if (!confirmDiscardUnsavedSelection()) return;
@@ -573,18 +601,6 @@
       return row;
     }
 
-    document.getElementById('syncBtn').addEventListener('click', async () => {
-      const msg = document.getElementById('syncMsg');
-      msg.innerHTML = '<div class="empty" style="padding:10px">Syncing…</div>';
-      try {
-        const result = await api.post('/api/admin/sync');
-        msg.innerHTML = `<div class="ok-msg">Synced: ${result.updatedGames} game updates, ${result.gradedPicks} picks graded.</div>`;
-        loadManagePicks();
-      } catch (err) {
-        msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
-      }
-    });
-
     async function loadPlayers() {
       const list = document.getElementById('playersList');
       try {
@@ -626,6 +642,7 @@
     }
 
     weekLabel();
+    showAdminTab('picks');
     init();
   </script>
 </body>
