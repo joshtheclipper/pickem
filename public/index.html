@@ -281,8 +281,6 @@
                 : 'Prop pick — Yes/No'));
 
       const disablePick = p.locked || p.my_answer_locked;
-        ? `<span class="status-final">CORRECT ANSWER = ${p.correct_answer.toUpperCase()}</span>`
-        : (p.locked ? '🔒 Locked' : 'Prop pick — Yes/No');
 
       div.innerHTML = `
         <div class="prop-status">${statusText}</div>
