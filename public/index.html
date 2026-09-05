@@ -17,7 +17,7 @@
     <nav>
       <a href="#" id="tabPicks" class="active">Picks</a>
       <a href="#" id="tabBoard">Leaderboard</a>
-      <a href="/account.html">Account</a>
+      <a href="/account.html" id="tabAccount">Account</a>
       <a href="/admin.html" id="tabAdmin" style="display:none">Admin</a>
     </nav>
     <div class="who">
@@ -73,7 +73,6 @@
        pick that isn't locked in yet on the currently-viewed week. Locking
        in is what unlocks pick-to-see for that game. Hidden by default. -->
   <div id="lockPicksBar" class="floating-save-bar" style="display:none">
-    <span class="floating-save-text">You have picks that aren't locked in yet</span>
     <button class="btn" id="lockPicksBtn" style="width:auto">Lock in picks</button>
   </div>
 
@@ -85,6 +84,7 @@
     let year = currentSeasonYear();
     let boardScope = 'overall';
     let currentGames = []; // last-loaded games for the visible league/week, used to drive the lock-in bar
+    let currentProps = []; // last-loaded props for the visible league/week, used to drive the lock-in bar
 
     const gamesList = document.getElementById('gamesList');
     const weekLabel = document.getElementById('weekLabel');
@@ -98,9 +98,26 @@
       loadGames();
     }
 
+    // Confirms before any in-app navigation away from picks (Leaderboard tab,
+    // Account/Admin links, sign out) while picks are still unlocked — the
+    // beforeunload warning below only covers actually closing/reloading the
+    // page, not these SPA-internal or same-tab link navigations.
+    function confirmLeaveIfUnlocked() {
+      if (!hasUnlockedPicks()) return true;
+      return window.confirm("You have picks that aren't locked in yet. Leave this page anyway?");
+    }
+
     document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if (!confirmLeaveIfUnlocked()) return;
       await api.post('/api/auth/logout');
       window.location.href = '/login.html';
+    });
+
+    document.getElementById('tabAccount').addEventListener('click', (e) => {
+      if (!confirmLeaveIfUnlocked()) e.preventDefault();
+    });
+    document.getElementById('tabAdmin').addEventListener('click', (e) => {
+      if (!confirmLeaveIfUnlocked()) e.preventDefault();
     });
 
     // Tab switching
@@ -110,6 +127,7 @@
     });
     document.getElementById('tabBoard').addEventListener('click', (e) => {
       e.preventDefault();
+      if (!confirmLeaveIfUnlocked()) return;
       show('board');
       loadBoard();
     });
@@ -161,28 +179,53 @@
     // Poll for live score/quarter updates while the picks tab is visible.
     // Matches the cadence of the server's own ESPN sync, so there's no
     // point checking more often than that.
-    setInterval(() => {
+    function pollGamesIfVisible() {
       if (document.visibilityState !== 'visible') return;
       if (document.getElementById('picksView').style.display === 'none') return;
       loadGames(true);
-    }, 30000);
+    }
+    setInterval(pollGamesIfVisible, 30000);
+
+    // Background tabs get their timers throttled by the browser, so the
+    // 30s interval above can fall behind while the tab is hidden. Catch up
+    // immediately when the player switches back instead of waiting for the
+    // next tick.
+    document.addEventListener('visibilitychange', pollGamesIfVisible);
 
     // --- Lock in picks ---
     // A pick only becomes visible to other players once it's locked in (or
-    // the game starts). This floating bar appears whenever the current
-    // league/week has a made-but-unlocked pick on a game that hasn't
-    // started yet, and lets the player commit all of them at once.
-    function updateLockBar() {
-      const hasUnlockedPicks = currentGames.some((g) => g.my_pick && !g.my_pick_locked && !g.locked);
-      document.getElementById('lockPicksBar').style.display = hasUnlockedPicks ? 'flex' : 'none';
+    // the game/prop itself locks). This floating bar appears whenever the
+    // current league/week has a made-but-unlocked pick — on a game or a
+    // prop — and lets the player commit all of them at once.
+    function hasUnlockedPicks() {
+      return (
+        currentGames.some((g) => g.my_pick && !g.my_pick_locked && !g.locked) ||
+        currentProps.some((p) => p.my_answer && !p.my_answer_locked && !p.locked)
+      );
     }
+
+    function updateLockBar() {
+      document.getElementById('lockPicksBar').style.display = hasUnlockedPicks() ? 'flex' : 'none';
+    }
+
+    // Warn before leaving the page (closing the tab, navigating away,
+    // refreshing) while picks are still unlocked, so players don't
+    // accidentally forget to commit them.
+    window.addEventListener('beforeunload', (e) => {
+      if (!hasUnlockedPicks()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
 
     document.getElementById('lockPicksBtn').addEventListener('click', async () => {
       const btn = document.getElementById('lockPicksBtn');
       btn.disabled = true;
       try {
-        await api.post('/api/picks/lock', { league, week, year });
-        await loadGames(); // refresh so badges/buttons reflect the newly-locked state
+        await Promise.all([
+          api.post('/api/picks/lock', { league, week, year }),
+          api.post('/api/props/lock', { league, week, year }),
+        ]);
+        await loadGames(); // refresh so badges/buttons reflect the newly-locked state (this also reloads props)
       } catch (err) {
         picksMsg.innerHTML = `<div class="error-msg">${err.message}</div>`;
       } finally {
@@ -196,6 +239,8 @@
       propsList.innerHTML = '';
       try {
         const { props } = await api.get(`/api/props?league=${league}&week=${week}&year=${year}`);
+        currentProps = props;
+        updateLockBar();
         props.forEach((p) => propsList.appendChild(renderProp(p)));
       } catch (err) {
         // Non-fatal — just skip the props section if something goes wrong.
@@ -205,28 +250,89 @@
     function renderProp(p) {
       const div = document.createElement('div');
       div.className = 'prop';
+      if (p.status === 'closed') div.classList.add('graded');
       if (p.my_answer_correct === 1) div.classList.add('graded-correct');
       if (p.my_answer_correct === 0) div.classList.add('graded-incorrect');
 
       const statusText = p.status === 'closed'
         ? `<span class="status-final">GRADED — ${p.correct_answer.toUpperCase()}</span>`
-        : (p.locked ? '🔒 Locked' : 'Prop pick — Yes/No');
+        : (p.locked
+            ? '🔒 Locked'
+            : (p.my_answer_locked
+                ? '<span class="prop-pick-locked-badge">🔒 Pick locked</span>'
+                : 'Prop pick — Yes/No'));
+
+      const disablePick = p.locked || p.my_answer_locked;
 
       div.innerHTML = `
         <div class="prop-status">${statusText}</div>
         <div class="prop-question">${p.question}</div>
         <div class="prop-choices">
-          <button class="prop-btn yes-btn ${p.my_answer === 'yes' ? 'picked' : ''}" ${p.locked ? 'disabled' : ''}>YES</button>
-          <button class="prop-btn no-btn ${p.my_answer === 'no' ? 'picked' : ''}" ${p.locked ? 'disabled' : ''}>NO</button>
+          <button class="prop-btn yes-btn ${p.my_answer === 'yes' ? 'picked' : ''}" ${disablePick ? 'disabled' : ''}>YES</button>
+          <button class="prop-btn no-btn ${p.my_answer === 'no' ? 'picked' : ''}" ${disablePick ? 'disabled' : ''}>NO</button>
         </div>
       `;
 
       const yesBtn = div.querySelector('.yes-btn');
       const noBtn = div.querySelector('.no-btn');
-      if (!p.locked) {
+      if (!disablePick) {
         yesBtn.addEventListener('click', () => makePropPick(p.id, 'yes', div));
         noBtn.addEventListener('click', () => makePropPick(p.id, 'no', div));
       }
+
+      // Everyone's answers on a prop, same "reveal" pattern as game picks.
+      const revealWrap = document.createElement('div');
+      revealWrap.className = 'picks-reveal-wrap';
+      revealWrap.innerHTML = `
+        <div class="picks-reveal-footer">
+          <button class="reveal-btn">Show picks ▾</button>
+        </div>
+        <div class="picks-reveal" style="display:none"></div>
+      `;
+      div.appendChild(revealWrap);
+
+      const revealBtn = revealWrap.querySelector('.reveal-btn');
+      const revealPanel = revealWrap.querySelector('.picks-reveal');
+      let loaded = false;
+
+      revealBtn.addEventListener('click', async () => {
+        const isOpen = revealPanel.style.display !== 'none';
+        if (isOpen) {
+          revealPanel.style.display = 'none';
+          revealBtn.textContent = 'Show picks ▾';
+          return;
+        }
+        revealBtn.textContent = 'Hide picks ▴';
+        revealPanel.style.display = '';
+        if (loaded) return;
+        revealPanel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
+        try {
+          const { picks } = await api.get(`/api/props/${p.id}/picks`);
+          loaded = true;
+          if (picks.length === 0) {
+            revealPanel.innerHTML = '<div class="empty" style="padding:10px">No one has answered this prop yet.</div>';
+            return;
+          }
+          revealPanel.innerHTML = '';
+          picks.forEach((row) => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'pick-row';
+            if (row.is_correct === 1) rowEl.classList.add('pick-correct');
+            if (row.is_correct === 0) rowEl.classList.add('pick-incorrect');
+            rowEl.innerHTML = `<span>${row.username}</span><span class="pick-row-team">${row.answer.toUpperCase()}</span>`;
+            revealPanel.appendChild(rowEl);
+          });
+        } catch (err) {
+          if (err.status === 403) {
+            // Pick-to-see: they haven't locked in their own answer on this
+            // prop yet, so this isn't really an error — just a prompt.
+            revealPanel.innerHTML = `<div class="empty" style="padding:10px">${err.message}</div>`;
+          } else {
+            revealPanel.innerHTML = `<div class="error-msg">${err.message}</div>`;
+          }
+        }
+      });
+
       return div;
     }
 
@@ -242,6 +348,12 @@
 
       try {
         await api.post('/api/props/pick', { prop_id: propId, answer });
+        const cached = currentProps.find((p) => p.id === propId);
+        if (cached) {
+          cached.my_answer = answer;
+          cached.my_answer_locked = false;
+          updateLockBar();
+        }
       } catch (err) {
         yesBtn.classList.toggle('picked', prevYes);
         noBtn.classList.toggle('picked', prevNo);

@@ -7,6 +7,9 @@ const router = express.Router();
 // GET /api/games?league=NFL&week=1&year=2026
 // Returns games for the week, plus the current user's pick on each (if any).
 router.get('/', requireAuth, (req, res) => {
+  // Live in-progress games change every couple minutes server-side; don't
+  // let a proxy or the browser serve a stale cached copy of this poll.
+  res.set('Cache-Control', 'no-store');
   const { league, week, year } = req.query;
   if (!league || !week || !year) {
     return res.status(400).json({ error: 'league, week, and year are required' });

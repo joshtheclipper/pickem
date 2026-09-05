@@ -19,7 +19,7 @@ router.get('/', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT prop_id, answer, is_correct FROM prop_picks WHERE user_id = ? AND prop_id IN (${props.map(() => '?').join(',') || 'NULL'})`
+      `SELECT prop_id, answer, is_correct, locked_in FROM prop_picks WHERE user_id = ? AND prop_id IN (${props.map(() => '?').join(',') || 'NULL'})`
     )
     .all(req.user.id, ...props.map((p) => p.id));
 
@@ -31,6 +31,7 @@ router.get('/', requireAuth, (req, res) => {
     locked: p.status === 'closed' || (p.locks_at && new Date(p.locks_at) <= now),
     my_answer: pickMap[p.id] ? pickMap[p.id].answer : null,
     my_answer_correct: pickMap[p.id] ? pickMap[p.id].is_correct : null,
+    my_answer_locked: pickMap[p.id] ? !!pickMap[p.id].locked_in : false,
   }));
 
   res.json({ props: enriched });
@@ -51,8 +52,12 @@ router.post('/pick', requireAuth, (req, res) => {
   }
 
   const existing = db
-    .prepare('SELECT id FROM prop_picks WHERE user_id = ? AND prop_id = ?')
+    .prepare('SELECT id, locked_in FROM prop_picks WHERE user_id = ? AND prop_id = ?')
     .get(req.user.id, prop_id);
+
+  if (existing && existing.locked_in) {
+    return res.status(400).json({ error: 'This pick is locked in and can no longer be changed' });
+  }
 
   if (existing) {
     db.prepare("UPDATE prop_picks SET answer = ?, updated_at = datetime('now') WHERE id = ?").run(answer, existing.id);
@@ -61,6 +66,64 @@ router.post('/pick', requireAuth, (req, res) => {
   }
 
   res.json({ ok: true });
+});
+
+// POST /api/props/lock  { league, week, year }
+// Same bulk "lock in" action as /api/picks/lock, but for prop answers —
+// locking is what unlocks pick-to-see for a prop that hasn't closed yet.
+router.post('/lock', requireAuth, (req, res) => {
+  const { league, week, year } = req.body || {};
+  if (!league || !week || !year) {
+    return res.status(400).json({ error: 'league, week, and year are required' });
+  }
+
+  const result = db
+    .prepare(
+      `UPDATE prop_picks
+       SET locked_in = 1, updated_at = datetime('now')
+       WHERE user_id = ? AND locked_in = 0 AND prop_id IN (
+         SELECT id FROM props WHERE league = ? AND week = ? AND season_year = ?
+       )`
+    )
+    .run(req.user.id, league, week, year);
+
+  res.json({ ok: true, locked: result.changes });
+});
+
+// GET /api/props/:id/picks - everyone's answer on a single prop.
+//
+// "Pick-to-see": before a prop locks, a player can only view everyone
+// else's answer on it once they've locked in their own — same mechanic as
+// GET /api/games/:id/picks.
+router.get('/:id/picks', requireAuth, (req, res) => {
+  const prop = db.prepare('SELECT * FROM props WHERE id = ?').get(req.params.id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const propLocked = prop.status === 'closed' || (prop.locks_at && new Date(prop.locks_at) <= new Date());
+
+  if (!propLocked) {
+    const myAnswer = db
+      .prepare('SELECT locked_in FROM prop_picks WHERE user_id = ? AND prop_id = ?')
+      .get(req.user.id, req.params.id);
+    const myAnswerLocked = myAnswer ? !!myAnswer.locked_in : false;
+    if (!myAnswerLocked) {
+      return res.status(403).json({
+        error: 'Lock in your answer on this prop to see everyone else’s picks',
+        pick_to_see: true,
+      });
+    }
+  }
+
+  const picks = db
+    .prepare(
+      `SELECT u.username, pp.answer, pp.is_correct
+       FROM prop_picks pp JOIN users u ON u.id = pp.user_id
+       WHERE pp.prop_id = ?
+       ORDER BY u.username ASC`
+    )
+    .all(req.params.id);
+
+  res.json({ picks });
 });
 
 module.exports = router;
