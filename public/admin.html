@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — Pick'em Challenge</title>
+<!-- Paints the dark background immediately, before style.css (which chains
+     to a remote Google Fonts @import) finishes loading — otherwise every
+     navigation between pages flashes white while that chain resolves.
+     Purely cosmetic — no JS, no interaction with the tab-switching logic. -->
+<style>html{background:#12261c}</style>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="stylesheet" href="/css/admin-improvements.css">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
