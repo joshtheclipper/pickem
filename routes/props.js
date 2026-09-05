@@ -68,6 +68,33 @@ router.post('/pick', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// DELETE /api/props/pick  { prop_id }
+// Clear an unlocked answer entirely — same deselect affordance as
+// DELETE /api/picks.
+router.delete('/pick', requireAuth, (req, res) => {
+  const { prop_id } = req.body || {};
+  if (!prop_id) return res.status(400).json({ error: 'prop_id is required' });
+
+  const prop = db.prepare('SELECT * FROM props WHERE id = ?').get(prop_id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  if (prop.status === 'closed' || (prop.locks_at && new Date(prop.locks_at) <= new Date())) {
+    return res.status(400).json({ error: 'This prop is locked' });
+  }
+
+  const existing = db
+    .prepare('SELECT id, locked_in FROM prop_picks WHERE user_id = ? AND prop_id = ?')
+    .get(req.user.id, prop_id);
+
+  if (existing && existing.locked_in) {
+    return res.status(400).json({ error: 'This pick is locked in and can no longer be changed' });
+  }
+
+  if (existing) db.prepare('DELETE FROM prop_picks WHERE id = ?').run(existing.id);
+
+  res.json({ ok: true });
+});
+
 // POST /api/props/lock  { league, week, year }
 // Same bulk "lock in" action as /api/picks/lock, but for prop answers —
 // locking is what unlocks pick-to-see for a prop that hasn't closed yet.
