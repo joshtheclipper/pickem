@@ -198,14 +198,19 @@ router.get('/props', requireAdmin, (req, res) => {
   }
   const props = db
     .prepare(
-      'SELECT * FROM props WHERE league = ? AND week = ? AND season_year = ? AND included = 1 ORDER BY created_at ASC'
+      `SELECT p.*, (SELECT COUNT(*) FROM prop_picks pp WHERE pp.prop_id = p.id) AS pick_count
+       FROM props p
+       WHERE p.league = ? AND p.week = ? AND p.season_year = ? AND p.included = 1
+       ORDER BY p.created_at ASC`
     )
     .all(league, week, year);
   res.json({ props });
 });
 
 // POST /api/admin/props/grade  { id, correct_answer: 'yes'|'no' }
-// Grades every pick submitted on this prop and closes it.
+// Grades every pick submitted on this prop and closes it. Safe to call again
+// on an already-closed prop to change the grade — every pick is re-scored
+// against the new answer, so the leaderboard corrects itself on the next load.
 router.post('/props/grade', requireAdmin, (req, res) => {
   const { id, correct_answer } = req.body || {};
   if (!id || !['yes', 'no'].includes(correct_answer)) {
@@ -227,15 +232,75 @@ router.post('/props/grade', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/admin/props/remove { id } - hide a prop (only if no one has picked it yet)
-router.post('/props/remove', requireAdmin, (req, res) => {
+// POST /api/admin/props/ungrade  { id }
+// Reverses a grade: reopens the prop and resets every pick's is_correct back
+// to NULL, so it drops out of the leaderboard until it's graded again.
+router.post('/props/ungrade', requireAdmin, (req, res) => {
   const { id } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id is required' });
-  const pickCount = db.prepare('SELECT COUNT(*) AS c FROM prop_picks WHERE prop_id = ?').get(id).c;
-  if (pickCount > 0) {
-    return res.status(400).json({ error: 'Cannot remove a prop that already has picks on it — grade it instead' });
+  const prop = db.prepare('SELECT id FROM props WHERE id = ?').get(id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const tx = db.transaction(() => {
+    db.prepare("UPDATE props SET status = 'open', correct_answer = NULL WHERE id = ?").run(id);
+    db.prepare("UPDATE prop_picks SET is_correct = NULL, updated_at = datetime('now') WHERE prop_id = ?").run(id);
+  });
+  tx();
+
+  res.json({ ok: true });
+});
+
+// POST /api/admin/props/edit  { id, question?, locks_at? }
+// Fix a prop's wording or lock time. Only the fields sent are touched, and
+// grading is left untouched — changing the answer is /props/grade's job.
+router.post('/props/edit', requireAdmin, (req, res) => {
+  const { id, question, locks_at } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  const prop = db.prepare('SELECT id FROM props WHERE id = ?').get(id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const fields = [];
+  const params = [];
+  if (question !== undefined) {
+    if (!String(question).trim()) return res.status(400).json({ error: 'question cannot be empty' });
+    fields.push('question = ?');
+    params.push(String(question).trim());
   }
-  db.prepare('UPDATE props SET included = 0 WHERE id = ?').run(id);
+  if (locks_at !== undefined) {
+    fields.push('locks_at = ?');
+    params.push(locks_at || null);
+  }
+  if (fields.length === 0) return res.status(400).json({ error: 'nothing to update' });
+
+  params.push(id);
+  db.prepare(`UPDATE props SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  res.json({ ok: true });
+});
+
+// POST /api/admin/props/remove { id, force? }
+// With no picks on it, the prop is just hidden (included = 0). Once picks
+// exist, removing it also throws away those picks (which count toward the
+// leaderboard), so that needs an explicit force flag — the client confirms
+// it with the admin first. prop_picks cascades on delete.
+router.post('/props/remove', requireAdmin, (req, res) => {
+  const { id, force } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  const prop = db.prepare('SELECT id FROM props WHERE id = ?').get(id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const pickCount = db.prepare('SELECT COUNT(*) AS c FROM prop_picks WHERE prop_id = ?').get(id).c;
+  if (pickCount > 0 && !force) {
+    return res.status(400).json({
+      error: `This prop has ${pickCount} pick${pickCount === 1 ? '' : 's'} on it. Deleting it will also delete those picks.`,
+      needs_force: true,
+    });
+  }
+
+  if (pickCount > 0) {
+    db.prepare('DELETE FROM props WHERE id = ?').run(id);
+  } else {
+    db.prepare('UPDATE props SET included = 0 WHERE id = ?').run(id);
+  }
   res.json({ ok: true });
 });
 
@@ -268,6 +333,9 @@ router.post('/users/set-pin', requireAdmin, (req, res) => {
   const { id, new_pin } = req.body || {};
   if (!id || !new_pin) {
     return res.status(400).json({ error: 'id and new_pin are required' });
+  }
+  if (Number(id) === req.user.id) {
+    return res.status(400).json({ error: 'Change your own PIN from the Account tab' });
   }
   if (String(new_pin).length < 4) {
     return res.status(400).json({ error: 'PIN must be at least 4 characters' });

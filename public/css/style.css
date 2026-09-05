@@ -299,10 +299,33 @@ a { color: var(--gold-bright); }
   padding: 12px;
   margin-bottom: 8px;
 }
-.admin-prop-item .q { font-size: 0.88rem; margin-bottom: 8px; }
-.admin-prop-item .grade-row { display: flex; gap: 8px; align-items: center; }
-.admin-prop-item .grade-row button { font-size: 0.78rem; padding: 5px 10px; }
-.admin-prop-item .graded-tag { font-size: 0.75rem; color: var(--gold-bright); }
+.admin-prop-item .q { font-size: 0.88rem; }
+.admin-prop-item .q-row { margin-bottom: 6px; }
+.admin-prop-item .q-edit { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.admin-prop-item .q-edit textarea {
+  flex: 1 1 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  background: var(--turf-dark);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: var(--radius);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.86rem;
+  resize: vertical;
+}
+.admin-prop-item .prop-meta { font-size: 0.75rem; color: var(--gold-bright); margin-bottom: 10px; }
+.admin-prop-item .prop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+/* Every button in the action bar is the same size, whatever its colour. */
+.admin-prop-item .prop-actions button { font-size: 0.75rem; padding: 4px 9px; width: auto; flex: 0 0 auto; margin: 0; }
+.btn.tiny { font-size: 0.75rem; padding: 4px 9px; width: auto; flex: 0 0 auto; }
 
 /* --- Leaderboard --- */
 .board-row {
