@@ -30,6 +30,13 @@
   <div class="wrap">
     <h2 style="margin:26px 0 18px">Admin</h2>
 
+    <div class="tabbar" id="adminSubtabs">
+      <button class="league-tab active" data-admin-tab="picks">Picks</button>
+      <button class="league-tab" data-admin-tab="props">Props</button>
+      <button class="league-tab" data-admin-tab="manage">Manage Picks</button>
+      <button class="league-tab" data-admin-tab="players">Players</button>
+    </div>
+
     <div class="tabbar" id="leagueTabbar">
       <button class="league-tab active" data-league="NFL">NFL</button>
       <button class="league-tab" data-league="NCAAF">NCAAF</button>
@@ -38,13 +45,6 @@
         <span id="weekLabel">Week 1</span>
         <button id="weekUp">›</button>
       </div>
-    </div>
-
-    <div class="tabbar" id="adminSubtabs">
-      <button class="league-tab active" data-admin-tab="picks">Picks</button>
-      <button class="league-tab" data-admin-tab="props">Props</button>
-      <button class="league-tab" data-admin-tab="manage">Manage Picks</button>
-      <button class="league-tab" data-admin-tab="players">Players</button>
     </div>
 
     <div id="adminTabPicks" class="admin-tab-panel">
@@ -262,6 +262,9 @@
       document.getElementById('adminTabProps').style.display = which === 'props' ? '' : 'none';
       document.getElementById('adminTabManage').style.display = which === 'manage' ? '' : 'none';
       document.getElementById('adminTabPlayers').style.display = which === 'players' ? '' : 'none';
+      // Players isn't scoped to a league/week, so the league/week tabbar is
+      // irrelevant there — hide it along with the rest.
+      document.getElementById('leagueTabbar').style.display = which === 'players' ? 'none' : '';
       document.querySelectorAll('#adminSubtabs .league-tab').forEach((b) => {
         b.classList.toggle('active', b.dataset.adminTab === which);
       });
@@ -612,15 +615,60 @@
           const isSelf = currentUser && u.id === currentUser.id;
           row.innerHTML = `
             <span>${u.username} ${u.is_admin ? '<span class="pill saved">admin</span>' : ''}</span>
-            ${isSelf ? '' : `<button class="btn danger" style="width:auto" data-remove-user="${u.id}" data-username="${u.username}">Delete</button>`}
+            <span style="display:flex;gap:8px">
+              <button class="btn secondary" style="width:auto" data-reset-pin="${u.id}" data-username="${u.username}">Reset PIN</button>
+              ${u.is_admin ? '' : `<button class="btn secondary" style="width:auto" data-make-admin="${u.id}" data-username="${u.username}">Make admin</button>`}
+              ${isSelf ? '' : `<button class="btn danger" style="width:auto" data-remove-user="${u.id}" data-username="${u.username}">Delete</button>`}
+            </span>
           `;
           list.appendChild(row);
         });
         list.querySelectorAll('[data-remove-user]').forEach((btn) => {
           btn.addEventListener('click', () => removePlayer(btn.dataset.removeUser, btn.dataset.username));
         });
+        list.querySelectorAll('[data-reset-pin]').forEach((btn) => {
+          btn.addEventListener('click', () => resetPlayerPin(btn.dataset.resetPin, btn.dataset.username));
+        });
+        list.querySelectorAll('[data-make-admin]').forEach((btn) => {
+          btn.addEventListener('click', () => makePlayerAdmin(btn.dataset.makeAdmin, btn.dataset.username));
+        });
       } catch (err) {
         list.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    // Resets a player's PIN on their behalf (e.g. they forgot it) — unlike
+    // the self-service Account page, this doesn't require their current PIN.
+    async function resetPlayerPin(id, username) {
+      const newPin = window.prompt(`New PIN for ${username} (at least 4 characters):`);
+      if (newPin === null) return; // cancelled
+      if (newPin.length < 4) {
+        alert('PIN must be at least 4 characters.');
+        return;
+      }
+      try {
+        await api.post('/api/admin/users/set-pin', { id: Number(id), new_pin: newPin });
+        alert(`PIN updated for ${username}.`);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Only one admin exists at a time, so promoting someone else means
+    // giving up your own admin access immediately — warn explicitly since
+    // this isn't just granting a permission, it's also revoking your own.
+    async function makePlayerAdmin(id, username) {
+      const proceed = window.confirm(
+        `Make ${username} the admin? Only one admin is allowed at a time, so this will remove your own admin access immediately, and you'll be signed out so your session reflects the change. Continue?`
+      );
+      if (!proceed) return;
+      try {
+        await api.post('/api/admin/users/make-admin', { id: Number(id) });
+        alert(`${username} is now the admin. You'll be signed out now.`);
+        await api.post('/api/auth/logout');
+        window.location.href = '/login.html';
+      } catch (err) {
+        alert(err.message);
       }
     }
 
