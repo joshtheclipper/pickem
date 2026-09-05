@@ -155,7 +155,7 @@ a { color: var(--gold-bright); }
   content: '';
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: var(--win-green);
+  background: var(--loss-red);
   animation: live-pulse 1.4s ease-in-out infinite;
 }
 @keyframes live-pulse {
@@ -232,6 +232,7 @@ a { color: var(--gold-bright); }
 
 /* --- Prop questions --- */
 .prop {
+  position: relative;
   background: var(--charcoal);
   border: 1px solid var(--line);
   border-left: 4px solid var(--gold);
@@ -239,7 +240,7 @@ a { color: var(--gold-bright); }
   padding: 14px;
   margin-bottom: 10px;
 }
-.prop.graded-correct { border-left-color: var(--gold); }
+.prop.graded-correct { border-left-color: var(--win-green); }
 .prop.graded-incorrect { border-left-color: var(--loss-red); }
 .prop-question { font-size: 0.95rem; margin-bottom: 10px; line-height: 1.4; }
 .prop-choices { display: flex; gap: 8px; }
@@ -256,9 +257,19 @@ a { color: var(--gold-bright); }
   letter-spacing: 0.03em;
 }
 .prop-btn:hover:not(:disabled) { border-color: var(--gold); }
-.prop-btn:disabled { cursor: default; opacity: 0.75; }
+.prop-btn:disabled { cursor: default; }
+/* Only fade the choice buttons once the prop is actually graded — while
+   merely locked (pre-grade), they should look the same as always-open. */
+.prop.graded .prop-btn:disabled { opacity: 0.75; }
 .prop-btn.picked { background: var(--gold); color: var(--turf-dark); border-color: var(--gold); font-weight: 700; }
 .prop-status { font-size: 0.7rem; color: var(--chalk-dim); margin-bottom: 8px; }
+.prop-pick-locked-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 0.7rem;
+  color: var(--chalk-dim);
+}
 
 /* --- Admin prop composer --- */
 .prop-form {
@@ -495,7 +506,7 @@ a { color: var(--gold-bright); }
 /* --- Pick-to-see: player-initiated lock-in --- */
 /* A slightly different tone from the kickoff-based "🔒 Locked" badge, so
    players can tell "I locked this myself" apart from "this game started". */
-.game-meta .lock.pick-locked-badge { color: var(--chalk-dim); }
+.game-meta .lock.pick-locked-badge, .pick-locked-badge { color: var(--chalk-dim); }
 
 /* --- Floating action bar (shared pattern: admin's "save selected games",
    player's "lock in picks") --- */

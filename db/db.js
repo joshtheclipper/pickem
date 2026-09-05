@@ -37,6 +37,7 @@ const migrations = [
   { table: 'games', column: 'status_detail', ddl: 'ALTER TABLE games ADD COLUMN status_detail TEXT' },
   { table: 'picks', column: 'locked_in', ddl: 'ALTER TABLE picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },
   { table: 'picks', column: 'admin_overridden', ddl: 'ALTER TABLE picks ADD COLUMN admin_overridden INTEGER NOT NULL DEFAULT 0' },
+  { table: 'prop_picks', column: 'locked_in', ddl: 'ALTER TABLE prop_picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },
 ];
 for (const m of migrations) {
   const cols = db.prepare(`PRAGMA table_info(${m.table})`).all();

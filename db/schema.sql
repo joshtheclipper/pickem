@@ -80,6 +80,10 @@ CREATE TABLE IF NOT EXISTS prop_picks (
   prop_id INTEGER NOT NULL REFERENCES props(id) ON DELETE CASCADE,
   answer TEXT NOT NULL CHECK (answer IN ('yes','no')),
   is_correct INTEGER, -- NULL until graded
+  -- Player-initiated "lock in", same pick-to-see mechanic as picks.locked_in
+  -- (see routes/games.js) — a player can't view everyone else's answer on a
+  -- prop until they've committed their own, or the prop itself has locked.
+  locked_in INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, prop_id)
