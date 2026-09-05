@@ -228,7 +228,7 @@
       if (p.my_answer_correct === 0) div.classList.add('graded-incorrect');
 
       const statusText = p.status === 'closed'
-        ? `<span class="status-final">GRADED — ${p.correct_answer.toUpperCase()}</span>`
+        ? `<span class="status-final">CORRECT ANSWER = ${p.correct_answer.toUpperCase()}</span>`
         : (p.locked ? '🔒 Locked' : 'Prop pick — Yes/No');
 
       div.innerHTML = `

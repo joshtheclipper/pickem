@@ -338,35 +338,124 @@
       }
     }
 
+    function propsErr(err) {
+      document.getElementById('propsMsg').innerHTML = `<div class="error-msg">${err.message}</div>`;
+    }
+
     function renderAdminProp(p) {
       const div = document.createElement('div');
       div.className = 'admin-prop-item';
-      if (p.status === 'closed') {
-        div.innerHTML = `
-          <div class="q">${p.question}</div>
-          <span class="graded-tag">Graded — correct answer: ${p.correct_answer.toUpperCase()}</span>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="q">${p.question}</div>
-          <div class="grade-row">
-            <span style="font-size:0.78rem;color:var(--chalk-dim)">Grade:</span>
-            <button class="btn secondary" data-answer="yes" style="width:auto">Correct = YES</button>
-            <button class="btn secondary" data-answer="no" style="width:auto">Correct = NO</button>
-          </div>
-        `;
-        div.querySelectorAll('button[data-answer]').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            try {
-              await api.post('/api/admin/props/grade', { id: p.id, correct_answer: btn.dataset.answer });
-              loadAdminProps();
-            } catch (err) {
-              document.getElementById('propsMsg').innerHTML = `<div class="error-msg">${err.message}</div>`;
-            }
-          });
+      const graded = p.status === 'closed';
+      const picks = p.pick_count || 0;
+      const pickNote = `${picks} pick${picks === 1 ? '' : 's'}`;
+
+      // --- question ---
+      const qRow = document.createElement('div');
+      qRow.className = 'q-row';
+      const qText = document.createElement('div');
+      qText.className = 'q';
+      qText.textContent = p.question;
+      qRow.append(qText);
+      div.appendChild(qRow);
+
+      // --- status / grade meta line ---
+      const meta = document.createElement('div');
+      meta.className = 'prop-meta';
+      meta.textContent = graded
+        ? `Graded — correct answer: ${p.correct_answer.toUpperCase()} · ${pickNote}`
+        : `Not graded · ${pickNote}`;
+      div.appendChild(meta);
+
+      // --- action bar, always pinned to the bottom of the card ---
+      const actions = document.createElement('div');
+      actions.className = 'prop-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn secondary tiny';
+      editBtn.textContent = 'Edit text';
+      editBtn.addEventListener('click', () => {
+        qRow.hidden = true;
+        actions.hidden = true;
+        const box = document.createElement('div');
+        box.className = 'q-edit';
+        const ta = document.createElement('textarea');
+        ta.value = p.question;
+        const save = document.createElement('button');
+        save.className = 'btn secondary tiny';
+        save.textContent = 'Save';
+        const cancel = document.createElement('button');
+        cancel.className = 'btn secondary tiny';
+        cancel.textContent = 'Cancel';
+        box.append(ta, save, cancel);
+        div.insertBefore(box, qRow.nextSibling);
+        ta.focus();
+        cancel.addEventListener('click', () => { box.remove(); qRow.hidden = false; actions.hidden = false; });
+        save.addEventListener('click', async () => {
+          const question = ta.value.trim();
+          if (!question) { propsErr(new Error('Question cannot be empty.')); return; }
+          try {
+            await api.post('/api/admin/props/edit', { id: p.id, question });
+            loadAdminProps();
+          } catch (err) { propsErr(err); }
         });
+      });
+      actions.appendChild(editBtn);
+
+      if (graded) {
+        const other = p.correct_answer === 'yes' ? 'no' : 'yes';
+        const flip = document.createElement('button');
+        flip.className = 'btn secondary tiny';
+        flip.textContent = `Change to ${other.toUpperCase()}`;
+        flip.addEventListener('click', () => regrade(p.id, other));
+        const reopen = document.createElement('button');
+        reopen.className = 'btn secondary tiny';
+        reopen.textContent = 'Reopen (ungrade)';
+        reopen.addEventListener('click', async () => {
+          if (!confirm('Reopen this prop? Its picks will go ungraded and drop off the leaderboard until you grade it again.')) return;
+          try {
+            await api.post('/api/admin/props/ungrade', { id: p.id });
+            loadAdminProps();
+          } catch (err) { propsErr(err); }
+        });
+        actions.append(flip, reopen);
+      } else {
+        const yes = document.createElement('button');
+        yes.className = 'btn secondary tiny';
+        yes.textContent = 'Correct = YES';
+        yes.addEventListener('click', () => regrade(p.id, 'yes'));
+        const no = document.createElement('button');
+        no.className = 'btn secondary tiny';
+        no.textContent = 'Correct = NO';
+        no.addEventListener('click', () => regrade(p.id, 'no'));
+        actions.append(yes, no);
       }
+
+      const del = document.createElement('button');
+      del.className = 'btn danger tiny';
+      del.textContent = 'Delete prop';
+      del.addEventListener('click', () => removeProp(p, picks));
+      actions.appendChild(del);
+
+      div.appendChild(actions);
       return div;
+    }
+
+    async function regrade(id, correct_answer) {
+      try {
+        await api.post('/api/admin/props/grade', { id, correct_answer });
+        loadAdminProps();
+      } catch (err) { propsErr(err); }
+    }
+
+    async function removeProp(p, picks) {
+      const base = picks
+        ? `Delete "${p.question}"? This also deletes the ${picks} pick${picks === 1 ? '' : 's'} made on it and updates the leaderboard.`
+        : `Delete "${p.question}"?`;
+      if (!confirm(base)) return;
+      try {
+        await api.post('/api/admin/props/remove', { id: p.id, force: picks > 0 });
+        loadAdminProps();
+      } catch (err) { propsErr(err); }
     }
 
     // --- ESPN fetch (now automatic on league/week change; button is a manual refresh) ---
@@ -621,7 +710,7 @@
           row.innerHTML = `
             <span>${u.username} ${u.is_admin ? '<span class="pill saved">admin</span>' : ''}</span>
             <span style="display:flex;gap:8px">
-              <button class="btn secondary" style="width:auto" data-reset-pin="${u.id}" data-username="${u.username}">Reset PIN</button>
+              ${isSelf ? '' : `<button class="btn secondary" style="width:auto" data-reset-pin="${u.id}" data-username="${u.username}">Reset PIN</button>`}
               ${u.is_admin ? '' : `<button class="btn secondary" style="width:auto" data-make-admin="${u.id}" data-username="${u.username}">Make admin</button>`}
               ${isSelf ? '' : `<button class="btn danger" style="width:auto" data-remove-user="${u.id}" data-username="${u.username}">Delete</button>`}
             </span>
