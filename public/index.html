@@ -345,6 +345,14 @@
 
       const yesBtn = div.querySelector('.yes-btn');
       const noBtn = div.querySelector('.no-btn');
+
+      // Once graded, ring the correct answer in gold — even if the player
+      // didn't pick it — so the right call is always legible next to a
+      // wrong (red) pick.
+      if (p.status === 'closed' && p.correct_answer) {
+        (p.correct_answer === 'yes' ? yesBtn : noBtn).classList.add('correct-pick');
+      }
+
       if (!disablePick) {
         yesBtn.addEventListener('click', () => makePropPick(p.id, 'yes', div));
         noBtn.addEventListener('click', () => makePropPick(p.id, 'no', div));
@@ -484,6 +492,13 @@
       `;
 
       div.dataset.gameId = g.id;
+
+      // Once the game is final, ring the winning team in gold — even if the
+      // player didn't pick it — so the correct pick stands out next to a
+      // wrong (red) one. Ties have no correct side.
+      if (g.status === 'final' && (g.winner === 'home' || g.winner === 'away')) {
+        div.querySelector(g.winner === 'home' ? '.home-btn' : '.away-btn').classList.add('correct-pick');
+      }
 
       // Everyone's picks are visible on any game at any time — not just
       // after it locks. The pick buttons themselves stay disabled once
