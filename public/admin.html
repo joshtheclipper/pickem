@@ -118,8 +118,15 @@
   <script src="/js/api.js"></script>
   <script>
     let league = 'NFL';
-    let week = estimateCurrentWeek();
     let year = currentSeasonYear();
+    // Per-league remembered week, so switching NFL<->NCAAF doesn't carry the
+    // other league's week over. Seeded with the date estimate, then replaced
+    // per league by the server's schedule-derived current week in init().
+    // The week arrows deliberately mutate `week` only, not this map — the
+    // league-switch handler captures the live `week` into the map right
+    // before switching, so the map just needs to be correct at that moment.
+    const weekByLeague = { NFL: estimateCurrentWeek(), NCAAF: estimateCurrentWeek() };
+    let week = weekByLeague[league];
     let fetchedGames = []; // games pulled from ESPN, with .selected flag
     let currentUser = null; // set in init(); used to hide the delete-self option in Players
 
@@ -208,8 +215,28 @@
       }
       currentUser = user;
       document.getElementById('whoami').textContent = user.username;
+      await resolveCurrentWeeks();
       loadPlayers();
       refreshAdminView();
+    }
+
+    // Default each league to the week the server derives from the actual
+    // schedule. The admin panel uses admin_weeks — the next slate to
+    // build/manage — not the players' current week. Falls back silently to
+    // the date estimate already seeded in weekByLeague if the request fails
+    // or a league has no games yet.
+    async function resolveCurrentWeeks() {
+      try {
+        const { admin_weeks: aw } = await api.get(`/api/games/current-week?year=${year}`);
+        if (aw) {
+          if (aw.NFL) weekByLeague.NFL = aw.NFL;
+          if (aw.NCAAF) weekByLeague.NCAAF = aw.NCAAF;
+          week = weekByLeague[league];
+          weekLabel();
+        }
+      } catch (e) {
+        /* keep the date-based fallback */
+      }
     }
 
     // Guards every link in the top nav (brand logo, Picks, Leaderboard,
@@ -251,7 +278,9 @@
         if (!confirmDiscardUnsavedSelection()) return;
         document.querySelectorAll('#leagueTabbar .league-tab').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
+        weekByLeague[league] = week; // remember where this league was left
         league = btn.dataset.league;
+        week = weekByLeague[league]; // and jump to the other league's week
         weekLabel();
         refreshAdminView();
       });

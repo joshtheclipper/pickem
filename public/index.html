@@ -85,8 +85,16 @@
   <script src="/js/installPrompt.js"></script>
   <script>
     let league = 'NFL';
-    let week = estimateCurrentWeek();
     let year = currentSeasonYear();
+    // Each league gets its own remembered week, so switching NFL<->NCAAF
+    // doesn't drag the other league's week number along. Seeded with the
+    // date-based estimate, then overwritten per league by the server's
+    // schedule-derived current week in resolveCurrentWeeks().
+    // The week arrows mutate `week` only, not this map — the league-switch
+    // handler captures the live `week` into the map right before switching,
+    // so the map only needs to be right at that moment.
+    const weekByLeague = { NFL: estimateCurrentWeek(), NCAAF: estimateCurrentWeek() };
+    let week = weekByLeague[league];
     let boardScope = 'overall';
     let currentGames = []; // last-loaded games for the visible league/week, used to drive the lock-in bar
     let currentProps = []; // last-loaded props for the visible league/week, used to drive the lock-in bar
@@ -100,8 +108,27 @@
       if (!user) return;
       document.getElementById('whoami').textContent = user.username;
       if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
+      await resolveCurrentWeeks();
       loadGames();
       if (initialTab === 'board') loadBoard();
+    }
+
+    // Ask the server which week is "current" for each league based on the
+    // actual schedule the admin entered, and default to it. Falls back
+    // silently to the date-based estimate already in weekByLeague if the
+    // request fails or a league has no games yet.
+    async function resolveCurrentWeeks() {
+      try {
+        const { weeks } = await api.get(`/api/games/current-week?year=${year}`);
+        if (weeks) {
+          if (weeks.NFL) weekByLeague.NFL = weeks.NFL;
+          if (weeks.NCAAF) weekByLeague.NCAAF = weeks.NCAAF;
+          week = weekByLeague[league];
+          weekLabel.textContent = `Week ${week}`;
+        }
+      } catch (e) {
+        /* keep the date-based fallback */
+      }
     }
 
     // Confirms before any in-app navigation away from picks (Leaderboard tab,
@@ -161,7 +188,9 @@
       btn.addEventListener('click', () => {
         document.querySelectorAll('#picksView .league-tab').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
+        weekByLeague[league] = week; // remember where this league was left
         league = btn.dataset.league;
+        week = weekByLeague[league]; // and jump to the other league's week
         loadGames();
       });
     });
@@ -177,8 +206,11 @@
       if (!silent) {
         gamesList.innerHTML = '<div class="empty">Loading…</div>';
         picksMsg.innerHTML = '';
-        loadProps();
       }
+      // Refresh props on every pass, including the silent 30s poll — otherwise
+      // a prop the admin grades mid-session never picks up its correct/incorrect
+      // colour until the player reloads or switches week/league.
+      loadProps(silent);
       try {
         const { games } = await api.get(`/api/games?league=${league}&week=${week}&year=${year}`);
         currentGames = games;
@@ -253,13 +285,33 @@
 
     const propsList = document.getElementById('propsList');
 
-    async function loadProps() {
-      propsList.innerHTML = '';
+    // Everything about a prop that changes how renderProp() draws it, in a
+    // flat string — used to skip the DOM rebuild on a silent poll when
+    // nothing actually changed, so an open "Show picks" panel doesn't snap
+    // shut every 30s while the player is reading it.
+    function propsSignature(list) {
+      return list
+        .map((p) => [p.id, p.question, p.status, p.correct_answer, p.locked, p.my_answer, p.my_answer_correct, p.my_answer_locked].join('~'))
+        .join('|');
+    }
+
+    async function loadProps(silent = false) {
+      if (!silent) propsList.innerHTML = '';
       try {
         const { props } = await api.get(`/api/props?league=${league}&week=${week}&year=${year}`);
+        if (silent && propsSignature(props) === propsSignature(currentProps)) {
+          currentProps = props;
+          updateLockBar();
+          return;
+        }
         currentProps = props;
         updateLockBar();
-        props.forEach((p) => propsList.appendChild(renderProp(p)));
+        // Build off-DOM and swap in one go so the silent refresh doesn't
+        // flash an empty gap between clearing and repopulating.
+        const frag = document.createDocumentFragment();
+        props.forEach((p) => frag.appendChild(renderProp(p)));
+        propsList.innerHTML = '';
+        propsList.appendChild(frag);
       } catch (err) {
         // Non-fatal — just skip the props section if something goes wrong.
       }
