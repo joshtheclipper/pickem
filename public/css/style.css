@@ -197,6 +197,17 @@ a { color: var(--gold-bright); }
 .game.graded-correct .team-btn.picked { background: var(--win-green); border-color: var(--win-green); }
 .game.graded-incorrect .team-btn.picked { background: var(--loss-red); border-color: var(--loss-red); color: var(--chalk); }
 .game.graded-incorrect .team-btn.picked .rank-badge { color: var(--chalk); }
+/* Gold ring on the correct pick once it's graded — shown whether or not
+   the player chose it, so the right answer reads clearly next to a wrong
+   (red) one. box-shadow rather than a thicker border so nothing shifts in
+   the layout; :disabled in the selector keeps this ahead of the graded
+   0.75-opacity fade so the correct pick stays at full strength. */
+.game.game-final .team-btn.correct-pick:disabled,
+.prop.graded .prop-btn.correct-pick:disabled {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold);
+  opacity: 1;
+}
 .team-btn.right-side { flex-direction: row-reverse; text-align: right; }
 .team-btn img { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
 .team-btn .abbr { font-family: 'Teko', sans-serif; font-size: 1.15rem; }

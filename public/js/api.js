@@ -31,14 +31,20 @@ async function requireLogin() {
 }
 
 function currentSeasonYear() {
-  return new Date().getFullYear();
+  const now = new Date();
+  // NFL/NCAAF seasons straddle the new year — a game played in Jan/Feb
+  // (playoffs, bowls) still belongs to the season that kicked off the
+  // previous August, so it keeps the earlier calendar year.
+  return now.getMonth() <= 1 ? now.getFullYear() - 1 : now.getFullYear();
 }
 
-// A reasonable default week estimate (NFL/NCAAF regular seasons start early Sept).
+// A rough date-only week estimate, used only as a fallback when the server
+// can't derive the current week from the actual schedule (e.g. no games
+// entered yet). The real default comes from GET /api/games/current-week.
 // Admin/users can still navigate to any week manually.
 function estimateCurrentWeek() {
   const now = new Date();
-  const seasonStart = new Date(now.getFullYear(), 8, 1); // Sept 1
+  const seasonStart = new Date(currentSeasonYear(), 8, 1); // Sept 1
   if (now < seasonStart) return 1;
   const diffDays = Math.floor((now - seasonStart) / 86400000);
   return Math.max(1, Math.min(18, Math.floor(diffDays / 7) + 1));

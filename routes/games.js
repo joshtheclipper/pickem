@@ -80,6 +80,56 @@ router.get('/:id/picks', requireAuth, (req, res) => {
   res.json({ picks });
 });
 
+// GET /api/games/current-week?year=2026
+// Best guess at the "active" week for each league, derived from the real
+// slate rather than a calendar formula (NFL and NCAAF start on different
+// dates and don't line up week-for-week).
+//
+// Two answers, because players and the admin want different things once a
+// week wraps up:
+//   weeks       - for the Picks page. Earliest week whose last kickoff is
+//                 still ahead of us (plus a ~6h grace so a week in progress
+//                 doesn't jump forward mid-slate); if every entered week is
+//                 over, stays on the most recent one (never an empty week).
+//   admin_weeks - for the admin panel. Same "current" week as above, but
+//                 once every entered week is over it rolls to the week
+//                 *after* the last one — the next slate to build — instead
+//                 of parking on a finished week.
+// Both null for a league with nothing scheduled yet; the client then falls
+// back to its date estimate.
+router.get('/current-week', requireAuth, (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const GRACE_MS = 6 * 60 * 60 * 1000;
+  const now = Date.now();
+  const weeks = {};
+  const admin_weeks = {};
+
+  for (const league of ['NFL', 'NCAAF']) {
+    const rows = db
+      .prepare(
+        `SELECT week, MAX(start_time) AS last_start
+         FROM games
+         WHERE league = ? AND season_year = ? AND included = 1
+         GROUP BY week ORDER BY week ASC`
+      )
+      .all(league, year);
+
+    if (rows.length === 0) {
+      weeks[league] = null;
+      admin_weeks[league] = null;
+      continue;
+    }
+
+    const lastStart = (r) => new Date(r.last_start).getTime();
+    const active = rows.find((r) => lastStart(r) + GRACE_MS > now);
+
+    weeks[league] = active ? active.week : rows[rows.length - 1].week;
+    admin_weeks[league] = active ? active.week : rows[rows.length - 1].week + 1;
+  }
+
+  res.json({ weeks, admin_weeks });
+});
+
 // GET /api/games/weeks - distinct league/week/year combos available, for nav
 router.get('/weeks', requireAuth, (req, res) => {
   const weeks = db
