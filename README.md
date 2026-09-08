@@ -23,6 +23,9 @@ account required beyond a place to host it.
   never against the spread.
 - **Simple auth.** Username + PIN, no email required. The first account created becomes admin.
   Players can change their own username/PIN later from the Account tab.
+- **Slate notifications (opt-in).** Players can turn on a Web Push notification, per device, from
+  the Account tab to get pinged when the admin posts a new slate (games or the first prop) for a
+  week. Requires VAPID keys and HTTPS; disabled entirely when the keys aren't set.
 - **Zero external dependencies for game data.** Schedules, team logos, and live scores come from
   ESPN's public scoreboard API — the same feed espn.com's own site uses. No API key or account
   needed.
@@ -72,6 +75,18 @@ All configuration is via environment variables (see `.env.example`):
 | `PORT` | No | `3000` | Port the server listens on. |
 | `DB_PATH` | No | `data/pickem.db` | Path to the SQLite file. |
 | `DISABLE_CRON` | No | `false` | Set `true` to disable the automatic 15-minute score sync. |
+| `VAPID_PUBLIC_KEY` | No | — | Public VAPID key for slate push notifications. Blank = feature off. |
+| `VAPID_PRIVATE_KEY` | No | — | Private VAPID key (keep secret). Blank = feature off. |
+| `VAPID_SUBJECT` | No | `mailto:admin@example.com` | Contact URI (`mailto:` or `https:`) sent to push services. |
+
+Generate a VAPID keypair once with:
+
+```bash
+node -e "console.log(require('web-push').generateVAPIDKeys())"
+```
+
+Push notifications also require the app to be served over HTTPS (browsers block the Push API on
+plain HTTP, except on `localhost`).
 
 ## Deploying
 
@@ -208,6 +223,9 @@ You can revisit a week anytime to add more games — already-saved games aren't 
 
 - **Season/week numbering** follows ESPN's own numbering for each league's regular season. Only
   `seasontype=2` (regular season) is wired up — postseason/bowl games aren't currently supported.
+  The "current week" the Picks/Admin pages default to is read live from ESPN's schedule calendar
+  (not from whichever games the admin has entered), so it's right even before a slate is built;
+  it falls back to the entered slate, then a date estimate, if ESPN can't be reached.
 - **Ties**: if ESPN marks a completed game as a tie, every pick on it is scored as incorrect (a
   "push") rather than crediting anyone.
 - **Prop questions** are graded manually by an admin — there's no automated data source for
@@ -224,11 +242,13 @@ You can revisit a week anytime to add more games — already-saved games aren't 
 server.js              Entry point — wires up routes + the 15-minute cron sync
 db/schema.sql           Table definitions (new tables only — see Migrations above)
 db/db.js                SQLite connection + migration runner
-routes/                 auth, games, picks, props, leaderboard, admin API endpoints
+routes/                 auth, games, picks, props, leaderboard, admin, push API endpoints
 middleware/auth.js      JWT session handling
-services/espn.js        ESPN scoreboard fetch + normalization (scores, ranks, odds)
+services/espn.js        ESPN scoreboard fetch + normalization (scores, ranks, odds, current week)
 services/grading.js     Score sync + pick grading logic
+services/push.js        Web Push (VAPID) sending + subscription storage for slate notifications
 public/                 Frontend — plain HTML/CSS/JS, no build step
+public/sw.js            Service worker — receives and displays push notifications
 Dockerfile, .dockerignore
                         Container build definition
 samples/                Example configs to copy from: .env.example, docker-compose.example.yml

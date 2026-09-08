@@ -10,6 +10,7 @@ const picksRoutes = require('./routes/picks');
 const propsRoutes = require('./routes/props');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
+const pushRoutes = require('./routes/push');
 const { syncAndGrade } = require('./services/grading');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/picks', picksRoutes);
 app.use('/api/props', propsRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/push', pushRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

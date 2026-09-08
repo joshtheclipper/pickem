@@ -54,9 +54,23 @@
       </div>
       <button class="btn" type="submit" id="submitBtn">Save changes</button>
     </form>
+
+    <div id="notifySection" style="max-width:340px;margin-top:38px;display:none">
+      <h3 style="margin:0 0 4px">Notifications</h3>
+      <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
+        Get a push notification on this device when the admin posts a new slate
+        (games or props) for a week.
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="checkbox" id="notifyToggle" style="width:18px;height:18px;accent-color:var(--gold)">
+        <span>Notify me when a new slate is posted</span>
+      </label>
+      <div id="notifyMsg" style="font-size:0.8rem;color:var(--chalk-dim);margin-top:10px"></div>
+    </div>
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/push.js"></script>
   <script>
     const form = document.getElementById('form');
     const msg = document.getElementById('msg');
@@ -68,6 +82,69 @@
       document.getElementById('whoami').textContent = user.username;
       document.getElementById('newUsername').value = user.username;
       if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
+      initNotifications();
+    }
+
+    // --- "Notify me when a new slate is posted" toggle ---
+    // The checkbox tracks whether *this device* is set up for push. Turning
+    // it on runs the permission prompt + subscription and flips the account
+    // flag; turning it off unsubscribes this device and clears the flag.
+    async function initNotifications() {
+      const section = document.getElementById('notifySection');
+      const toggle = document.getElementById('notifyToggle');
+      const msg = document.getElementById('notifyMsg');
+
+      let config;
+      try {
+        config = await api.get('/api/push/config');
+      } catch (e) {
+        return; // leave the section hidden
+      }
+      if (!config.enabled) return; // push not configured on the server
+
+      section.style.display = '';
+
+      if (!pushClient.supported()) {
+        toggle.disabled = true;
+        msg.textContent =
+          'This browser can’t show notifications. On iPhone, add this app to your Home Screen first, then try again.';
+        return;
+      }
+
+      const sub = await pushClient.currentSubscription();
+      toggle.checked = !!(config.notify_slate && sub);
+      if (config.notify_slate && !sub) {
+        msg.textContent = 'On for another device. Turn it on here to also get them on this one.';
+      }
+
+      toggle.addEventListener('change', async () => {
+        toggle.disabled = true;
+        msg.textContent = '';
+        try {
+          if (toggle.checked) {
+            const r = await pushClient.enable(config.public_key);
+            if (r.ok) {
+              msg.textContent = 'Done — you’ll get a notification when the next slate is posted.';
+            } else {
+              toggle.checked = false;
+              msg.textContent =
+                r.reason === 'denied'
+                  ? 'Notifications are blocked for this site in your browser settings.'
+                  : r.reason === 'unsupported'
+                  ? 'This browser can’t show notifications.'
+                  : 'Couldn’t turn notifications on. Try again.';
+            }
+          } else {
+            await pushClient.disable();
+            msg.textContent = 'Notifications turned off.';
+          }
+        } catch (e) {
+          toggle.checked = !toggle.checked;
+          msg.textContent = 'Something went wrong. Try again.';
+        } finally {
+          toggle.disabled = false;
+        }
+      });
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {

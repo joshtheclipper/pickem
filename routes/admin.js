@@ -4,6 +4,7 @@ const db = require('../db/db');
 const { requireAdmin } = require('../middleware/auth');
 const { fetchScoreboard } = require('../services/espn');
 const { syncAndGrade } = require('../services/grading');
+const push = require('../services/push');
 
 const router = express.Router();
 
@@ -92,6 +93,22 @@ router.post('/select-games', requireAdmin, (req, res) => {
     }
   });
   tx(games);
+
+  // Ping opted-in players that a slate is up, once per league/week (the
+  // service dedupes, so re-saving the same week doesn't re-notify). Fire and
+  // forget — a push hiccup must not fail the save.
+  const slates = new Map();
+  for (const g of games) {
+    slates.set(`${g.league}|${g.season_year}|${g.week}`, {
+      league: g.league,
+      season_year: g.season_year,
+      week: g.week,
+      kind: 'games',
+    });
+  }
+  for (const slate of slates.values()) {
+    push.notifySlatePosted(slate).catch((err) => console.error('notifySlatePosted:', err.message));
+  }
 
   res.json({ ok: true, saved: games.length });
 });
@@ -187,6 +204,19 @@ router.post('/props', requireAdmin, (req, res) => {
       'INSERT INTO props (league, season_year, week, question, locks_at) VALUES (?, ?, ?, ?, ?)'
     )
     .run(league, season_year, week, String(question).trim(), locks_at || null);
+
+  // First prop for this league/week? Let opted-in players know there's
+  // something new to pick. notifySlatePosted dedupes on (league,week,'props'),
+  // so later props that week stay quiet even if this count check races.
+  const propCount = db
+    .prepare('SELECT COUNT(*) AS c FROM props WHERE league = ? AND season_year = ? AND week = ? AND included = 1')
+    .get(league, season_year, week).c;
+  if (propCount === 1) {
+    push
+      .notifySlatePosted({ league, season_year, week, kind: 'props' })
+      .catch((err) => console.error('notifySlatePosted:', err.message));
+  }
+
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
