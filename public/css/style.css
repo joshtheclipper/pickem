@@ -558,6 +558,25 @@ a { color: var(--gold-bright); }
   .floating-save-text { white-space: normal; text-align: center; }
 }
 
+/* The player's "lock in picks" bar pins flush to the bottom edge as a
+   full-width action bar. The centered floating pill above drifts over
+   content during iOS Safari momentum scroll and reads as "in the way";
+   an edge-anchored bar stays glued down. Kept scoped to this id so the
+   admin page's stacked floating bars are unaffected. */
+#lockPicksBar.floating-save-bar {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: none;
+  max-width: none;
+  justify-content: center;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
 /* --- Admin-edited pick indicator --- */
 /* Shown at the bottom-right of a player's own game card (next to the
    reveal button) when an admin used their override to set/correct that
