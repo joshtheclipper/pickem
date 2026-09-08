@@ -36,6 +36,74 @@ async function fetchScoreboard(league, week, year, seasontype = 2) {
   return (data.events || []).map((ev) => normalizeEvent(ev, league, year, week));
 }
 
+/**
+ * Ask ESPN what week it currently is for a league, straight from their
+ * scoreboard feed — independent of whatever slate our admin has (or hasn't)
+ * entered. Called with no week param, so ESPN answers with "the week we're
+ * in right now", which rolls over to the next week a day or two after that
+ * week's last game.
+ *
+ * Returns { week, seasontype, year }. `week` is null if ESPN's answer isn't
+ * a regular-season week (preseason / postseason / off-season), so callers
+ * can fall back to their own estimate rather than showing a bogus number.
+ */
+async function fetchCurrentWeek(league) {
+  const path = LEAGUE_PATHS[league];
+  if (!path) throw new Error(`Unknown league: ${league}`);
+
+  const params = new URLSearchParams();
+  if (league === 'NCAAF') params.set('groups', '80');
+  const qs = params.toString();
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard${qs ? `?${qs}` : ''}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`ESPN API error (${res.status}) fetching current week for ${league}`);
+  }
+  const data = await res.json();
+
+  const seasontype = data.season && data.season.type;
+  const year = (data.season && data.season.year) || null;
+
+  // Prefer the calendar: it carries a real [startDate, endDate) for each
+  // week, so we pin the week to today's date rather than trusting whenever
+  // ESPN happens to flip data.week.number. (NFL ships this shape; college
+  // football's calendar is a flat date list with no per-week entries, so it
+  // falls through to data.week.number below.)
+  const now = Date.now();
+  const calWeek = regularSeasonWeekFromCalendar(data.leagues && data.leagues[0] && data.leagues[0].calendar, now);
+  if (calWeek) return { week: calWeek, seasontype: 2, year };
+
+  // Fallback: ESPN's own "current week" pointer, but only trust it during
+  // the regular season (seasontype 2) — a preseason "Week 2" is not our
+  // Week 2.
+  if (seasontype === 2 && data.week && data.week.number) {
+    return { week: Number(data.week.number), seasontype, year };
+  }
+
+  return { week: null, seasontype, year };
+}
+
+// Walk ESPN's calendar for the regular-season block and return the week
+// number whose date range spans `nowMs`. Returns null if the calendar isn't
+// the nested shape, or nothing spans now (e.g. we're in the preseason gap
+// before Week 1).
+function regularSeasonWeekFromCalendar(cal, nowMs) {
+  if (!Array.isArray(cal)) return null;
+  for (const block of cal) {
+    if (!block || typeof block !== 'object' || !Array.isArray(block.entries)) continue;
+    if (block.value != null && Number(block.value) !== 2) continue; // regular season only
+    for (const entry of block.entries) {
+      const start = entry.startDate ? Date.parse(entry.startDate) : NaN;
+      const end = entry.endDate ? Date.parse(entry.endDate) : NaN;
+      if (!Number.isNaN(start) && !Number.isNaN(end) && start <= nowMs && nowMs < end) {
+        return Number(entry.value);
+      }
+    }
+  }
+  return null;
+}
+
 function normalizeEvent(ev, league, seasonYear, week) {
   const comp = ev.competitions && ev.competitions[0];
   const competitors = (comp && comp.competitors) || [];
@@ -105,4 +173,4 @@ function normalizeEvent(ev, league, seasonYear, week) {
   };
 }
 
-module.exports = { fetchScoreboard, normalizeEvent };
+module.exports = { fetchScoreboard, fetchCurrentWeek, normalizeEvent };

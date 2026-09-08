@@ -7,6 +7,9 @@ services:
       - PORT=3000
       - JWT_SECRET=${PICKEM_JWT_SECRET}
       - DISABLE_CRON=false
+      - VAPID_PUBLIC_KEY=${PICKEM_VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${PICKEM_VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${PICKEM_VAPID_SUBJECT}
     volumes:
       - pickem_data:/app/data
     networks:
