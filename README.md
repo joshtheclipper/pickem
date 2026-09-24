@@ -26,6 +26,10 @@ account required beyond a place to host it.
 - **Slate notifications (opt-in).** Players can turn on a Web Push notification, per device, from
   the Account tab to get pinged when the admin posts a new slate (games or the first prop) for a
   week. Requires VAPID keys and HTTPS; disabled entirely when the keys aren't set.
+- **Kickoff reminders (opt-in).** A separate Account-tab toggle sends one grouped push about an
+  hour before kickoff listing any included games — and props with a lock time — the player still
+  hasn't picked. Checked every 5 minutes by the same cron as score sync (`DISABLE_CRON` turns both
+  off); each game/prop reminds a player at most once.
 - **Zero external dependencies for game data.** Schedules, team logos, and live scores come from
   ESPN's public scoreboard API — the same feed espn.com's own site uses. No API key or account
   needed.
@@ -246,7 +250,7 @@ routes/                 auth, games, picks, props, leaderboard, admin, push API 
 middleware/auth.js      JWT session handling
 services/espn.js        ESPN scoreboard fetch + normalization (scores, ranks, odds, current week)
 services/grading.js     Score sync + pick grading logic
-services/push.js        Web Push (VAPID) sending + subscription storage for slate notifications
+services/push.js        Web Push (VAPID) sending + subscription storage for slate notifications + kickoff reminders
 public/                 Frontend — plain HTML/CSS/JS, no build step
 public/sw.js            Service worker — receives and displays push notifications
 Dockerfile, .dockerignore

@@ -1,4 +1,4 @@
-// Client helpers for the "notify me when a new slate is posted" toggle.
+// Client helpers for the Account page notification toggles.
 // Depends on api.js (loaded first) for the api.* fetch wrappers.
 
 const pushClient = {
@@ -24,9 +24,10 @@ const pushClient = {
   },
 
   // Runs the full opt-in: permission prompt -> service worker -> push
-  // subscription -> hand it to the server (which also flips notify_slate on).
-  // Returns { ok: true } or { ok: false, reason }.
-  async enable(publicKey) {
+  // subscription -> hand it to the server along with the opt-in `flags` to
+  // set, e.g. { notify_kickoff: true }. Returns { ok: true } or
+  // { ok: false, reason }.
+  async enable(publicKey, flags) {
     if (!this.supported()) return { ok: false, reason: 'unsupported' };
 
     let permission = Notification.permission;
@@ -44,12 +45,12 @@ const pushClient = {
       });
     }
 
-    await api.post('/api/push/subscribe', { subscription: sub, notify_slate: true });
+    await api.post('/api/push/subscribe', { subscription: sub, ...flags });
     return { ok: true };
   },
 
-  // Tears the opt-in back down. Best-effort: even if unsubscribing the
-  // browser fails, the server flag still gets cleared.
+  // Tears every opt-in back down. Best-effort: even if unsubscribing the
+  // browser fails, the server flags still get cleared.
   async disable() {
     let endpoint;
     try {

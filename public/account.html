@@ -58,12 +58,17 @@
     <div id="notifySection" style="max-width:340px;margin-top:38px;display:none">
       <h3 style="margin:0 0 4px">Notifications</h3>
       <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
-        Get a push notification on this device when the admin posts a new slate
-        (games or props) for a week.
+        Get push notifications on this device when a new slate (games or props)
+        is posted for a week, and/or as a reminder when kickoff is an hour away
+        and you still haven’t picked.
       </div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
         <input type="checkbox" id="notifyToggle" style="width:18px;height:18px;accent-color:var(--gold)">
         <span>Notify me when a new slate is posted</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:10px">
+        <input type="checkbox" id="kickoffToggle" style="width:18px;height:18px;accent-color:var(--gold)">
+        <span>Remind me 1 hour before kickoff if I haven’t picked</span>
       </label>
       <div id="notifyMsg" style="font-size:0.8rem;color:var(--chalk-dim);margin-top:10px"></div>
     </div>
@@ -85,14 +90,23 @@
       initNotifications();
     }
 
-    // --- "Notify me when a new slate is posted" toggle ---
-    // The checkbox tracks whether *this device* is set up for push. Turning
-    // it on runs the permission prompt + subscription and flips the account
-    // flag; turning it off unsubscribes this device and clears the flag.
+    // --- Notification toggles ---
+    // Each checkbox tracks whether *this device* gets that kind of push.
+    // Both share one browser subscription: turning either on runs the
+    // permission prompt + subscription and sets its account flag; turning
+    // one off just clears its flag, unless the other is off too, in which
+    // case this device is unsubscribed entirely.
     async function initNotifications() {
       const section = document.getElementById('notifySection');
-      const toggle = document.getElementById('notifyToggle');
       const msg = document.getElementById('notifyMsg');
+      const toggles = {
+        notify_slate: document.getElementById('notifyToggle'),
+        notify_kickoff: document.getElementById('kickoffToggle'),
+      };
+      const onMessages = {
+        notify_slate: 'Done — you’ll get a notification when the next slate is posted.',
+        notify_kickoff: 'Done — you’ll get a reminder an hour before kickoff if you haven’t picked.',
+      };
 
       let config;
       try {
@@ -105,46 +119,53 @@
       section.style.display = '';
 
       if (!pushClient.supported()) {
-        toggle.disabled = true;
+        Object.values(toggles).forEach((t) => (t.disabled = true));
         msg.textContent =
           'This browser can’t show notifications. On iPhone, add this app to your Home Screen first, then try again.';
         return;
       }
 
       const sub = await pushClient.currentSubscription();
-      toggle.checked = !!(config.notify_slate && sub);
-      if (config.notify_slate && !sub) {
+      for (const [flag, toggle] of Object.entries(toggles)) {
+        toggle.checked = !!(config[flag] && sub);
+      }
+      if ((config.notify_slate || config.notify_kickoff) && !sub) {
         msg.textContent = 'On for another device. Turn it on here to also get them on this one.';
       }
 
-      toggle.addEventListener('change', async () => {
-        toggle.disabled = true;
-        msg.textContent = '';
-        try {
-          if (toggle.checked) {
-            const r = await pushClient.enable(config.public_key);
-            if (r.ok) {
-              msg.textContent = 'Done — you’ll get a notification when the next slate is posted.';
+      for (const [flag, toggle] of Object.entries(toggles)) {
+        toggle.addEventListener('change', async () => {
+          Object.values(toggles).forEach((t) => (t.disabled = true));
+          msg.textContent = '';
+          try {
+            if (toggle.checked) {
+              const r = await pushClient.enable(config.public_key, { [flag]: true });
+              if (r.ok) {
+                msg.textContent = onMessages[flag];
+              } else {
+                toggle.checked = false;
+                msg.textContent =
+                  r.reason === 'denied'
+                    ? 'Notifications are blocked for this site in your browser settings.'
+                    : r.reason === 'unsupported'
+                    ? 'This browser can’t show notifications.'
+                    : 'Couldn’t turn notifications on. Try again.';
+              }
+            } else if (Object.values(toggles).some((t) => t.checked)) {
+              await api.post('/api/push/prefs', { [flag]: false });
+              msg.textContent = 'Turned off.';
             } else {
-              toggle.checked = false;
-              msg.textContent =
-                r.reason === 'denied'
-                  ? 'Notifications are blocked for this site in your browser settings.'
-                  : r.reason === 'unsupported'
-                  ? 'This browser can’t show notifications.'
-                  : 'Couldn’t turn notifications on. Try again.';
+              await pushClient.disable();
+              msg.textContent = 'Notifications turned off.';
             }
-          } else {
-            await pushClient.disable();
-            msg.textContent = 'Notifications turned off.';
+          } catch (e) {
+            toggle.checked = !toggle.checked;
+            msg.textContent = 'Something went wrong. Try again.';
+          } finally {
+            Object.values(toggles).forEach((t) => (t.disabled = false));
           }
-        } catch (e) {
-          toggle.checked = !toggle.checked;
-          msg.textContent = 'Something went wrong. Try again.';
-        } finally {
-          toggle.disabled = false;
-        }
-      });
+        });
+      }
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {

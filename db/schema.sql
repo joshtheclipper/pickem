@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
   -- toggled from the Account page, which also registers the push
   -- subscription rows below.
   notify_slate INTEGER NOT NULL DEFAULT 0,
+  -- Opt-in: push a reminder ~1 hour before a game kicks off (or a prop
+  -- locks) if this player still hasn't picked it. Separate from
+  -- notify_slate; both share the push_subscriptions rows below.
+  notify_kickoff INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -36,6 +40,17 @@ CREATE TABLE IF NOT EXISTS slate_notifications (
   kind TEXT NOT NULL CHECK (kind IN ('games','props')),
   sent_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(league, season_year, week, kind)
+);
+
+-- Dedup guard for kickoff reminders: one row per player per game/prop
+-- they've already been reminded about, so the job never repeats itself.
+CREATE TABLE IF NOT EXISTS kickoff_reminders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('game','prop')),
+  item_id INTEGER NOT NULL,
+  sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(user_id, kind, item_id)
 );
 
 CREATE TABLE IF NOT EXISTS games (

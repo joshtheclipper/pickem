@@ -142,10 +142,18 @@ a { color: var(--gold-bright); }
 /* Finished games sit back visually — a darker ticket so they're easy to
    tell apart from games that haven't kicked off yet. */
 .game.game-final { background: #183524; }
-/* Live games get a highlighted border so they jump out of the list. */
+/* Live games get a pulsing red ring so they jump out of the list. Same
+   1.4s rhythm as the live dot in .game-meta below. */
 .game.game-live {
-  border-color: var(--gold-bright);
-  box-shadow: 0 0 10px rgba(240, 194, 106, 0.25);
+  border-color: var(--loss-red);
+  animation: live-ring 1.4s ease-in-out infinite;
+}
+@keyframes live-ring {
+  0%, 100% { box-shadow: 0 0 0 1px var(--loss-red), 0 0 12px rgba(193, 68, 60, 0.55); }
+  50% { box-shadow: 0 0 0 1px var(--loss-red), 0 0 2px rgba(193, 68, 60, 0.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game.game-live { animation: none; box-shadow: 0 0 0 1px var(--loss-red), 0 0 8px rgba(193, 68, 60, 0.4); }
 }
 
 .game-meta {
