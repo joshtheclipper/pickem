@@ -693,7 +693,6 @@
     function boardRowHtml(row, rank) {
       const isYou = me && row.user_id === me.id;
       const pct = row.graded_picks ? Math.round((row.correct_picks * 100) / row.graded_picks) : 0;
-      const wrong = row.graded_picks - row.correct_picks;
       return `
         <div class="board-row${isYou ? ' is-you' : ''}">
           <div class="rank">${rank}</div>
@@ -701,7 +700,7 @@
           ${avatarHtml(row, 36)}
           <div style="min-width:0">
             <div class="name"><span class="who">${escapeHtml(row.username)}</span>${isYou ? '<span class="you-tag">YOU</span>' : ''}${streakHtml(row.streak)}</div>
-            <div class="sub">${row.correct_picks}–${wrong} · ${pct}%</div>
+            <div class="sub">${row.correct_picks}/${row.graded_picks} · ${pct}%</div>
             <div class="acc-bar"><div style="width:${pct}%"></div></div>
           </div>
           <div class="pts">${row.correct_picks}</div>
@@ -729,13 +728,6 @@
         const rest = podium ? leaderboard.slice(3) : leaderboard;
         if (rest.length) {
           html += `<div class="board-list">${rest.map((r, i) => boardRowHtml(r, i + 1 + (podium ? 3 : 0))).join('')}</div>`;
-        }
-        if (leaderboard.some((r) => r.streak)) {
-          html += `
-            <div class="board-legend">
-              <span><span class="streak hot">${ICON_FLAME}3</span>3+ right in a row</span>
-              <span><span class="streak cold">${ICON_SNOW}3</span>3+ misses in a row</span>
-            </div>`;
         }
         boardList.innerHTML = html;
       } catch (err) {

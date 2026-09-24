@@ -586,8 +586,6 @@ a { color: var(--accent-text); }
 }
 .streak.hot { background: var(--hot-soft); color: var(--hot); }
 .streak.cold { background: var(--cold-soft); color: var(--cold); }
-.board-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; font-size: 0.75rem; font-weight: 700; color: var(--dim); }
-.board-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* --- Cards / settings (Account page) --- */
 .card {
