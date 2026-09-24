@@ -4,11 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pick'em Challenge</title>
-<!-- Paints the dark background immediately, before style.css (which chains
-     to a remote Google Fonts @import) finishes loading — otherwise every
-     navigation between pages flashes white while that chain resolves.
-     Purely cosmetic — no JS, no interaction with the tab-switching logic. -->
-<style>html{background:#12261c}</style>
+<meta name="theme-color" content="#12171c">
+<!-- theme.js sets data-theme on <html> before first paint; the inline style
+     then paints the right background immediately, before style.css (which
+     chains to a remote Google Fonts @import) finishes loading — otherwise
+     every navigation between pages flashes white while that chain resolves. -->
+<script src="/js/theme.js"></script>
+<style>html{background:#0a0d10}html[data-theme=light]{background:#eef1f4}</style>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -21,14 +23,10 @@
     <a class="brand" href="/index.html">PICK<span>'</span>EM</a>
     <nav>
       <a href="#" id="tabPicks" class="active">Picks</a>
-      <a href="#" id="tabBoard">Leaderboard</a>
+      <a href="#" id="tabBoard">Board</a>
       <a href="/account.html" id="tabAccount">Account</a>
       <a href="/admin.html" id="tabAdmin" style="display:none">Admin</a>
     </nav>
-    <div class="who">
-      <span id="whoami"></span>
-      <button id="logoutBtn">Sign out</button>
-    </div>
   </div>
 
   <div class="wrap">
@@ -36,12 +34,14 @@
     <!-- PICKS VIEW -->
     <div id="picksView">
       <div class="tabbar">
-        <button class="league-tab active" data-league="NFL">NFL</button>
-        <button class="league-tab" data-league="NCAAF">NCAAF</button>
+        <div class="seg">
+          <button class="league-tab active" data-league="NFL">NFL</button>
+          <button class="league-tab" data-league="NCAAF">NCAAF</button>
+        </div>
         <div class="week-nav">
-          <button id="weekDown">‹</button>
+          <button id="weekDown" aria-label="Previous week">‹</button>
           <span id="weekLabel">Week 1</span>
-          <button id="weekUp">›</button>
+          <button id="weekUp" aria-label="Next week">›</button>
         </div>
       </div>
       <div id="picksMsg"></div>
@@ -52,11 +52,13 @@
     <!-- LEADERBOARD VIEW -->
     <div id="boardView" style="display:none">
       <div class="tabbar">
-        <button class="league-tab active" data-scope="overall">Overall</button>
-        <button class="league-tab" data-scope="NFL">NFL</button>
-        <button class="league-tab" data-scope="NCAAF">NCAAF</button>
+        <div class="seg full">
+          <button class="league-tab active" data-scope="overall">Overall</button>
+          <button class="league-tab" data-scope="NFL">NFL</button>
+          <button class="league-tab" data-scope="NCAAF">NCAAF</button>
+        </div>
       </div>
-      <div id="boardList" style="margin-top:20px"></div>
+      <div id="boardList"></div>
     </div>
 
   </div>
@@ -78,7 +80,11 @@
        pick that isn't locked in yet on the currently-viewed week. Locking
        in is what unlocks pick-to-see for that game. Hidden by default. -->
   <div id="lockPicksBar" class="floating-save-bar" style="display:none">
-    <button class="btn" id="lockPicksBtn" style="width:auto">Lock in picks</button>
+    <div class="lock-copy">
+      <div class="lock-title" id="lockPicksTitle">Picks not locked in</div>
+      <div class="lock-sub">Lock in to see everyone’s picks</div>
+    </div>
+    <button class="btn" id="lockPicksBtn">Lock in</button>
   </div>
 
   <script src="/js/api.js"></script>
@@ -96,6 +102,7 @@
     const weekByLeague = { NFL: estimateCurrentWeek(), NCAAF: estimateCurrentWeek() };
     let week = weekByLeague[league];
     let boardScope = 'overall';
+    let me = null; // the signed-in player, for highlighting their leaderboard row
     let currentGames = []; // last-loaded games for the visible league/week, used to drive the lock-in bar
     let currentProps = []; // last-loaded props for the visible league/week, used to drive the lock-in bar
 
@@ -106,7 +113,7 @@
     async function init() {
       const user = await requireLogin();
       if (!user) return;
-      document.getElementById('whoami').textContent = user.username;
+      me = user;
       if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
       await resolveCurrentWeeks();
       loadGames();
@@ -152,12 +159,6 @@
     }
     show(initialTab);
 
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      if (!confirmLeaveIfUnlocked()) return;
-      await api.post('/api/auth/logout');
-      window.location.href = '/login.html';
-    });
-
     document.getElementById('tabAccount').addEventListener('click', (e) => {
       if (!confirmLeaveIfUnlocked()) e.preventDefault();
     });
@@ -181,6 +182,9 @@
       document.getElementById('boardView').style.display = which === 'board' ? '' : 'none';
       document.getElementById('tabPicks').classList.toggle('active', which === 'picks');
       document.getElementById('tabBoard').classList.toggle('active', which === 'board');
+      // The lock-in bar is about the picks on screen, so it only shows there.
+      if (which === 'board') document.getElementById('lockPicksBar').style.display = 'none';
+      else updateLockBar();
     }
 
     // League tabs (picks view)
@@ -219,7 +223,7 @@
           gamesList.innerHTML = `<div class="empty">No games selected yet for ${league} Week ${week}.<br>Check back once the admin sets the slate.</div>`;
           return;
         }
-        gamesList.innerHTML = '';
+        gamesList.innerHTML = `<div class="section-label">Games · ${games.length}</div>`;
         games.forEach((g) => gamesList.appendChild(renderGame(g)));
       } catch (err) {
         if (!silent) gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
@@ -255,7 +259,13 @@
     }
 
     function updateLockBar() {
-      document.getElementById('lockPicksBar').style.display = hasUnlockedPicks() ? 'flex' : 'none';
+      if (document.getElementById('picksView').style.display === 'none') return;
+      const n =
+        currentGames.filter((g) => g.my_pick && !g.my_pick_locked && !g.locked).length +
+        currentProps.filter((p) => p.my_answer && !p.my_answer_locked && !p.locked).length;
+      document.getElementById('lockPicksTitle').textContent =
+        `${n} pick${n === 1 ? '' : 's'} not locked in`;
+      document.getElementById('lockPicksBar').style.display = n > 0 ? 'flex' : 'none';
     }
 
     // Warn before leaving the page (closing the tab, navigating away,
@@ -309,6 +319,12 @@
         // Build off-DOM and swap in one go so the silent refresh doesn't
         // flash an empty gap between clearing and repopulating.
         const frag = document.createDocumentFragment();
+        if (props.length) {
+          const label = document.createElement('div');
+          label.className = 'section-label';
+          label.textContent = props.length === 1 ? 'Prop' : `Props · ${props.length}`;
+          frag.appendChild(label);
+        }
         props.forEach((p) => frag.appendChild(renderProp(p)));
         propsList.innerHTML = '';
         propsList.appendChild(frag);
@@ -325,17 +341,20 @@
       if (p.my_answer_correct === 0) div.classList.add('graded-incorrect');
 
       const statusText = p.status === 'closed'
-        ? `<span class="status-final">GRADED — ${p.correct_answer.toUpperCase()}</span>`
+        ? `<span class="chip status-final">Graded — ${p.correct_answer.toUpperCase()}</span>`
         : (p.locked
-            ? '🔒 Locked'
+            ? '<span class="chip chip-muted">🔒 Locked</span>'
             : (p.my_answer_locked
-                ? '<span class="prop-pick-locked-badge">🔒 Pick locked</span>'
-                : 'Prop pick — Yes/No'));
+                ? '<span class="chip chip-muted prop-pick-locked-badge">🔒 Pick locked</span>'
+                : '<span class="chip chip-cyan">Yes / No</span>'));
+      const locksText = p.locks_at
+        ? `Locks ${new Date(p.locks_at).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
+        : 'Prop';
 
       const disablePick = p.locked || p.my_answer_locked;
 
       div.innerHTML = `
-        <div class="prop-status">${statusText}</div>
+        <div class="prop-status"><span>${locksText}</span>${statusText}</div>
         <div class="prop-question">${p.question}</div>
         <div class="prop-choices">
           <button class="prop-btn yes-btn ${p.my_answer === 'yes' ? 'picked' : ''}" ${disablePick ? 'disabled' : ''}>YES</button>
@@ -397,7 +416,7 @@
             rowEl.className = 'pick-row';
             if (row.is_correct === 1) rowEl.classList.add('pick-correct');
             if (row.is_correct === 0) rowEl.classList.add('pick-incorrect');
-            rowEl.innerHTML = `<span>${row.username}</span><span class="pick-row-team">${row.answer.toUpperCase()}</span>`;
+            rowEl.innerHTML = `<span class="pick-row-who">${avatarHtml(row, 26)}<span>${escapeHtml(row.username)}</span></span><span class="pick-row-team">${row.answer.toUpperCase()}</span>`;
             revealPanel.appendChild(rowEl);
           });
         } catch (err) {
@@ -458,14 +477,14 @@
       const timeStr = kickoff.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
       const statusText = g.status === 'final'
-        ? `<span class="status-final">FINAL</span>`
+        ? `<span class="status-final">Final</span>`
         : g.status === 'in_progress'
           ? `<span class="lock live">${g.status_detail || 'In progress'}</span>`
           : (g.locked
               ? `<span class="lock">🔒 Locked</span>`
               : (g.my_pick_locked
                   ? `<span class="lock pick-locked-badge">🔒 Pick locked</span>`
-                  : `<span class="lock">Pick open</span>`));
+                  : `<span class="lock lock-open">Pick open</span>`));
 
       const adminEditedBadge = g.my_pick_admin_overridden
         ? '<span class="admin-edited-badge" title="An admin set or corrected this pick">Admin-edited</span>'
@@ -546,7 +565,7 @@
             const adminMark = p.admin_overridden
               ? '<span class="admin-edited-badge admin-edited-badge-inline">Admin-edited</span> '
               : '';
-            row.innerHTML = `<span>${p.username}</span><span class="pick-row-team">${adminMark}${teamLabel}</span>`;
+            row.innerHTML = `<span class="pick-row-who">${avatarHtml(p, 26)}<span>${escapeHtml(p.username)}</span></span><span class="pick-row-team">${adminMark}${teamLabel}</span>`;
             revealPanel.appendChild(row);
           });
         } catch (err) {
@@ -615,32 +634,112 @@
       });
     });
 
+    const ICON_CROWN = (size) =>
+      `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></svg>`;
+    const ICON_FLAME =
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.5 3 2.5 3-1-3 0-6 0-9z"/></svg>';
+    const ICON_SNOW =
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 2v20M3.5 7l17 10M20.5 7l-17 10M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5"/></svg>';
+
+    // Hot = 3+ right in a row (red flame), cold = 3+ wrong in a row (snowflake).
+    function streakHtml(st) {
+      if (!st) return '';
+      const hot = st.type === 'hot';
+      const label = `${st.count} ${hot ? 'right' : 'wrong'} in a row`;
+      return `<span class="streak ${st.type}" title="${label}" aria-label="${label}">${hot ? ICON_FLAME : ICON_SNOW}${st.count}</span>`;
+    }
+
+    // Places gained/lost since before the latest graded week.
+    function moveHtml(m) {
+      if (m == null) return '<span class="move same"></span>';
+      if (m > 0) return `<span class="move up" title="Up ${m} since last week">▲${m}</span>`;
+      if (m < 0) return `<span class="move down" title="Down ${-m} since last week">▼${-m}</span>`;
+      return '<span class="move same" title="No change since last week">—</span>';
+    }
+
+    function winnerCardHtml(w) {
+      if (!w) return '';
+      const names = w.winners.map((u) => escapeHtml(u.username)).join(' & ');
+      const faces = w.winners.slice(0, 3).map((u) => avatarHtml(u, 44)).join('');
+      return `
+        <div class="winner-card">
+          <div class="winner-stack">${faces}</div>
+          <div style="min-width:0;flex:1">
+            <div class="winner-label">${ICON_CROWN(14)}${w.league} Week ${w.week} winner${w.winners.length > 1 ? 's' : ''}</div>
+            <div class="winner-name">${names}</div>
+          </div>
+          <div class="winner-score num">${w.correct}/${w.graded}</div>
+        </div>`;
+    }
+
+    function podiumSpotHtml(row, place) {
+      const first = place === 1;
+      const blockH = { 1: 140, 2: 104, 3: 84 }[place];
+      const numSize = { 1: 58, 2: 44, 3: 38 }[place];
+      const isYou = me && row.user_id === me.id;
+      return `
+        <div class="podium-spot${first ? ' first' : ''}">
+          ${first ? `<div class="podium-crown">${ICON_CROWN(22)}</div>` : ''}
+          ${avatarHtml(row, first ? 60 : 48)}
+          <div class="podium-name">${escapeHtml(row.username)}${isYou ? ' <span class="you-tag" style="font-size:0.62rem;color:var(--accent-text)">YOU</span>' : ''}</div>
+          <div class="podium-tags">${moveHtml(row.movement)}${streakHtml(row.streak)}</div>
+          <div class="podium-block" style="height:${blockH}px">
+            <div class="num" style="font-size:${numSize}px">${place}</div>
+            <small>${row.correct_picks} correct</small>
+          </div>
+        </div>`;
+    }
+
+    function boardRowHtml(row, rank) {
+      const isYou = me && row.user_id === me.id;
+      const pct = row.graded_picks ? Math.round((row.correct_picks * 100) / row.graded_picks) : 0;
+      const wrong = row.graded_picks - row.correct_picks;
+      return `
+        <div class="board-row${isYou ? ' is-you' : ''}">
+          <div class="rank">${rank}</div>
+          ${moveHtml(row.movement)}
+          ${avatarHtml(row, 36)}
+          <div style="min-width:0">
+            <div class="name"><span class="who">${escapeHtml(row.username)}</span>${isYou ? '<span class="you-tag">YOU</span>' : ''}${streakHtml(row.streak)}</div>
+            <div class="sub">${row.correct_picks}–${wrong} · ${pct}%</div>
+            <div class="acc-bar"><div style="width:${pct}%"></div></div>
+          </div>
+          <div class="pts">${row.correct_picks}</div>
+        </div>`;
+    }
+
     async function loadBoard() {
       const boardList = document.getElementById('boardList');
-      boardList.innerHTML = '<div class="empty">Loading…</div>';
+      boardList.innerHTML = '<div class="empty" style="margin-top:14px">Loading…</div>';
       const qs = boardScope === 'overall' ? '' : `?league=${boardScope}`;
       try {
-        const { leaderboard } = await api.get(`/api/leaderboard${qs}`);
+        const { leaderboard, weekly_winner } = await api.get(`/api/leaderboard${qs}`);
         if (leaderboard.length === 0) {
-          boardList.innerHTML = '<div class="empty">No players yet.</div>';
+          boardList.innerHTML = '<div class="empty" style="margin-top:14px">No players yet.</div>';
           return;
         }
-        boardList.innerHTML = '';
-        leaderboard.forEach((row, i) => {
-          const div = document.createElement('div');
-          div.className = 'board-row';
-          div.innerHTML = `
-            <div class="rank">${i + 1}</div>
-            <div>
-              <div class="name">${row.username}</div>
-              <div class="sub">${row.graded_picks} graded picks</div>
-            </div>
-            <div class="pts">${row.correct_picks}<small>correct</small></div>
-          `;
-          boardList.appendChild(div);
-        });
+        // A podium only makes sense once there are three players and
+        // something has actually been graded.
+        const anyGraded = leaderboard.some((r) => r.graded_picks > 0);
+        const podium = anyGraded && leaderboard.length >= 3;
+        let html = winnerCardHtml(weekly_winner);
+        if (podium) {
+          html += `<div class="podium">${podiumSpotHtml(leaderboard[1], 2)}${podiumSpotHtml(leaderboard[0], 1)}${podiumSpotHtml(leaderboard[2], 3)}</div>`;
+        }
+        const rest = podium ? leaderboard.slice(3) : leaderboard;
+        if (rest.length) {
+          html += `<div class="board-list">${rest.map((r, i) => boardRowHtml(r, i + 1 + (podium ? 3 : 0))).join('')}</div>`;
+        }
+        if (leaderboard.some((r) => r.streak)) {
+          html += `
+            <div class="board-legend">
+              <span><span class="streak hot">${ICON_FLAME}3</span>3+ right in a row</span>
+              <span><span class="streak cold">${ICON_SNOW}3</span>3+ misses in a row</span>
+            </div>`;
+        }
+        boardList.innerHTML = html;
       } catch (err) {
-        boardList.innerHTML = `<div class="error-msg">${err.message}</div>`;
+        boardList.innerHTML = `<div class="error-msg" style="margin-top:14px">${escapeHtml(err.message)}</div>`;
       }
     }
 

@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   -- locks) if this player still hasn't picked it. Separate from
   -- notify_slate; both share the push_subscriptions rows below.
   notify_kickoff INTEGER NOT NULL DEFAULT 0,
+  -- UI color mode chosen on the Account page: 'dark' | 'light' | 'system'.
+  -- Stored on the account so it follows the player to every device.
+  theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark','light','system')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -29,6 +32,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
+
+-- Profile photos. The browser crops/shrinks the image to a small square
+-- JPEG before upload (see public/account.html), so rows stay tiny; the
+-- server still caps the upload size in routes/avatars.js. updated_at (ms)
+-- doubles as the cache-busting version in avatar URLs.
+CREATE TABLE IF NOT EXISTS user_avatars (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 
 -- Dedup guard so re-saving a slate (or adding a second prop) doesn't fire a
 -- second round of notifications for the same league/week/kind.

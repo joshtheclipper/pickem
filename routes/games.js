@@ -97,8 +97,9 @@ router.get('/:id/picks', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT u.username, p.pick, p.is_correct, p.admin_overridden
+      `SELECT u.id AS user_id, u.username, a.updated_at AS avatar_v, p.pick, p.is_correct, p.admin_overridden
        FROM picks p JOIN users u ON u.id = p.user_id
+       LEFT JOIN user_avatars a ON a.user_id = u.id
        WHERE p.game_id = ?
        ORDER BY u.username ASC`
     )

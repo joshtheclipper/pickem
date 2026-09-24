@@ -21,13 +21,35 @@ const api = {
 };
 
 async function requireLogin() {
+  let user;
   try {
-    const { user } = await api.get('/api/auth/me');
-    return user;
+    ({ user } = await api.get('/api/auth/me'));
   } catch (e) {
     window.location.href = '/login.html';
     return null;
   }
+  // The account's saved color mode wins over this device's cached one.
+  if (window.pickemTheme && user.theme && user.theme !== window.pickemTheme.pref) {
+    window.pickemTheme.set(user.theme);
+  }
+  return user;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+// A player's profile photo, or their initials when they haven't set one.
+// `u` needs user_id, username and avatar_v (the photo version, null = none).
+function avatarHtml(u, size = 32, extraClass = '') {
+  const dim = `width:${size}px;height:${size}px`;
+  if (u.avatar_v) {
+    return `<img class="avatar ${extraClass}" src="/api/avatars/${u.user_id}?v=${u.avatar_v}" alt="" style="${dim}" loading="lazy">`;
+  }
+  const letters = (String(u.username || '?').match(/[\p{L}\p{N}]/gu) || ['?']).slice(0, 2).join('').toUpperCase();
+  return `<span class="avatar avatar-ini ${extraClass}" style="${dim};font-size:${Math.round(size * 0.36)}px" aria-hidden="true">${escapeHtml(letters)}</span>`;
 }
 
 function currentSeasonYear() {

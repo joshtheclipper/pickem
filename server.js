@@ -11,6 +11,7 @@ const propsRoutes = require('./routes/props');
 const leaderboardRoutes = require('./routes/leaderboard');
 const adminRoutes = require('./routes/admin');
 const pushRoutes = require('./routes/push');
+const avatarRoutes = require('./routes/avatars');
 const push = require('./services/push');
 const { syncAndGrade } = require('./services/grading');
 
@@ -28,6 +29,7 @@ app.use('/api/props', propsRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/avatars', avatarRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

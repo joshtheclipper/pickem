@@ -4,11 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account — Pick'em Challenge</title>
-<!-- Paints the dark background immediately, before style.css (which chains
-     to a remote Google Fonts @import) finishes loading — otherwise every
-     navigation between pages flashes white while that chain resolves.
-     Purely cosmetic — no JS, no interaction with the tab-switching logic. -->
-<style>html{background:#12261c}</style>
+<meta name="theme-color" content="#12171c">
+<!-- theme.js sets data-theme on <html> before first paint; the inline style
+     then paints the right background immediately, before style.css (which
+     chains to a remote Google Fonts @import) finishes loading — otherwise
+     every navigation between pages flashes white while that chain resolves. -->
+<script src="/js/theme.js"></script>
+<style>html{background:#0a0d10}html[data-theme=light]{background:#eef1f4}</style>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -21,56 +23,86 @@
     <a class="brand" href="/index.html">PICK<span>'</span>EM</a>
     <nav>
       <a href="/index.html">Picks</a>
-      <a href="/index.html?tab=board" id="goBoard">Leaderboard</a>
+      <a href="/index.html?tab=board" id="goBoard">Board</a>
       <a href="/account.html" class="active">Account</a>
       <a href="/admin.html" id="tabAdmin" style="display:none">Admin</a>
     </nav>
-    <div class="who">
-      <span id="whoami"></span>
-      <button id="logoutBtn">Sign out</button>
-    </div>
   </div>
 
   <div class="wrap">
-    <h2 style="margin:26px 0 4px">Account settings</h2>
-    <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:20px">
-      Change your username and/or PIN. Your current PIN is required to confirm any change.
-    </div>
+    <div class="stack" style="margin-top:16px;max-width:520px">
 
-    <div id="msg"></div>
+      <div class="card profile-card">
+        <div class="profile-photo">
+          <span id="photoSlot"></span>
+          <button class="photo-btn" id="photoBtn" type="button" aria-label="Change profile photo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          </button>
+          <input type="file" id="photoInput" accept="image/*" hidden>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="profile-name" id="profileName"></div>
+          <div id="profileSub" style="font-size:0.75rem;color:var(--dim);font-weight:600;margin:4px 0 10px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn secondary" id="photoBtn2" type="button" style="min-height:36px;padding:6px 12px;font-size:0.82rem">Change photo</button>
+            <button class="btn ghost" id="photoRemoveBtn" type="button" style="min-height:36px;padding:6px 10px;font-size:0.82rem;display:none">Remove</button>
+          </div>
+          <div id="photoMsg" style="font-size:0.75rem;color:var(--dim);margin-top:8px"></div>
+        </div>
+      </div>
 
-    <form id="form" style="max-width:340px">
-      <div class="field">
-        <label for="newUsername">Username</label>
-        <input id="newUsername" maxlength="30">
+      <div class="card">
+        <div class="card-title">Appearance</div>
+        <div class="seg full" role="group" aria-label="Color mode" id="themeSeg">
+          <button class="seg-opt" type="button" data-theme-opt="dark" aria-pressed="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>Dark
+          </button>
+          <button class="seg-opt" type="button" data-theme-opt="light" aria-pressed="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Light
+          </button>
+          <button class="seg-opt" type="button" data-theme-opt="system" aria-pressed="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>System
+          </button>
+        </div>
+        <div style="font-size:0.75rem;color:var(--dim);margin-top:10px;line-height:1.5">
+          Dark is the default. System follows your device’s setting. Saved to your account, so it applies on every device.
+        </div>
       </div>
-      <div class="field">
-        <label for="newPin">New PIN <span style="text-transform:none">(leave blank to keep current)</span></label>
-        <input id="newPin" type="password" inputmode="numeric" minlength="4" autocomplete="new-password">
-      </div>
-      <div class="field">
-        <label for="currentPin">Current PIN <span style="text-transform:none">(required to save)</span></label>
-        <input id="currentPin" type="password" inputmode="numeric" required autocomplete="current-password">
-      </div>
-      <button class="btn" type="submit" id="submitBtn">Save changes</button>
-    </form>
 
-    <div id="notifySection" style="max-width:340px;margin-top:38px;display:none">
-      <h3 style="margin:0 0 4px">Notifications</h3>
-      <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
-        Get push notifications on this device when a new slate (games or props)
-        is posted for a week, and/or as a reminder when kickoff is an hour away
-        and you still haven’t picked.
+      <div class="card" id="notifySection" style="display:none">
+        <div class="card-title">Notifications</div>
+        <label class="switch-row">
+          <span><span class="t">New slate posted</span><span class="d">When the admin posts games or a prop</span></span>
+          <input type="checkbox" class="switch" id="notifyToggle">
+        </label>
+        <label class="switch-row">
+          <span><span class="t">Kickoff reminder</span><span class="d">1 hour before kickoff if you haven’t picked</span></span>
+          <input type="checkbox" class="switch" id="kickoffToggle">
+        </label>
+        <div id="notifyMsg" style="font-size:0.75rem;color:var(--dim);margin-top:6px"></div>
       </div>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-        <input type="checkbox" id="notifyToggle" style="width:18px;height:18px;accent-color:var(--gold)">
-        <span>Notify me when a new slate is posted</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:10px">
-        <input type="checkbox" id="kickoffToggle" style="width:18px;height:18px;accent-color:var(--gold)">
-        <span>Remind me 1 hour before kickoff if I haven’t picked</span>
-      </label>
-      <div id="notifyMsg" style="font-size:0.8rem;color:var(--chalk-dim);margin-top:10px"></div>
+
+      <div class="card">
+        <div class="card-title">Username &amp; PIN</div>
+        <div id="msg"></div>
+        <form id="form">
+          <div class="field">
+            <label for="newUsername">Username</label>
+            <input id="newUsername" maxlength="30">
+          </div>
+          <div class="field">
+            <label for="newPin">New PIN <span style="font-weight:600">(leave blank to keep)</span></label>
+            <input id="newPin" type="password" inputmode="numeric" minlength="4" autocomplete="new-password">
+          </div>
+          <div class="field">
+            <label for="currentPin">Current PIN <span style="font-weight:600">(required to save)</span></label>
+            <input id="currentPin" type="password" inputmode="numeric" required autocomplete="current-password">
+          </div>
+          <button class="btn" type="submit" id="submitBtn">Save changes</button>
+        </form>
+      </div>
+
+      <button class="btn danger" id="logoutBtn" type="button" style="width:100%;min-height:46px">Sign out</button>
     </div>
   </div>
 
@@ -81,13 +113,131 @@
     const msg = document.getElementById('msg');
     const submitBtn = document.getElementById('submitBtn');
 
+    let me = null;
+
     async function init() {
       const user = await requireLogin();
       if (!user) return;
-      document.getElementById('whoami').textContent = user.username;
+      me = user;
       document.getElementById('newUsername').value = user.username;
       if (user.is_admin) document.getElementById('tabAdmin').style.display = '';
+      renderProfile();
+      loadStanding();
+      initTheme();
       initNotifications();
+    }
+
+    // --- Profile card ---
+    function renderProfile() {
+      document.getElementById('photoSlot').innerHTML = avatarHtml({ user_id: me.id, username: me.username, avatar_v: me.avatar_v }, 84);
+      document.getElementById('profileName').textContent = me.username;
+      document.getElementById('photoRemoveBtn').style.display = me.avatar_v ? '' : 'none';
+    }
+
+    // "4th overall · 31–19" under the name. Purely decorative, so failures
+    // just leave it blank.
+    async function loadStanding() {
+      try {
+        const { leaderboard } = await api.get('/api/leaderboard');
+        const i = leaderboard.findIndex((r) => r.user_id === me.id);
+        if (i < 0 || !leaderboard[i].graded_picks) return;
+        const r = leaderboard[i];
+        const n = i + 1;
+        const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+        document.getElementById('profileSub').textContent =
+          `${n}${suffix} overall · ${r.correct_picks}–${r.graded_picks - r.correct_picks}`;
+      } catch (e) { /* leave blank */ }
+    }
+
+    // --- Profile photo ---
+    // The browser crops the picked image to a centered square and shrinks
+    // it to a 256px JPEG before upload (~20-40 KB), so the server never has
+    // to process full-size phone photos.
+    const PHOTO_SIZE = 256;
+    const photoInput = document.getElementById('photoInput');
+    const photoMsg = document.getElementById('photoMsg');
+    document.getElementById('photoBtn').addEventListener('click', () => photoInput.click());
+    document.getElementById('photoBtn2').addEventListener('click', () => photoInput.click());
+
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Couldn’t read that image')); };
+        img.src = url;
+      });
+    }
+
+    async function squareJpeg(file) {
+      const img = await loadImage(file);
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const sx = (img.naturalWidth - side) / 2;
+      const sy = (img.naturalHeight - side) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = PHOTO_SIZE;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
+      return new Promise((resolve, reject) =>
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Couldn’t process that image'))), 'image/jpeg', 0.85)
+      );
+    }
+
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files && photoInput.files[0];
+      photoInput.value = '';
+      if (!file) return;
+      photoMsg.textContent = 'Uploading…';
+      try {
+        const blob = await squareJpeg(file);
+        const res = await fetch('/api/avatars', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'image/jpeg' },
+          body: blob,
+          credentials: 'same-origin',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        me.avatar_v = data.avatar_v;
+        renderProfile();
+        photoMsg.textContent = '';
+      } catch (err) {
+        photoMsg.textContent = err.message;
+      }
+    });
+
+    document.getElementById('photoRemoveBtn').addEventListener('click', async () => {
+      photoMsg.textContent = '';
+      try {
+        await api.del('/api/avatars');
+        me.avatar_v = null;
+        renderProfile();
+      } catch (err) {
+        photoMsg.textContent = err.message;
+      }
+    });
+
+    // --- Appearance ---
+    function initTheme() {
+      const opts = document.querySelectorAll('[data-theme-opt]');
+      const mark = (pref) => opts.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeOpt === pref)));
+      mark(window.pickemTheme.pref);
+      opts.forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const prev = window.pickemTheme.pref;
+          const next = btn.dataset.themeOpt;
+          if (next === prev) return;
+          window.pickemTheme.set(next); // apply instantly, then save
+          mark(next);
+          try {
+            await api.post('/api/auth/theme', { theme: next });
+          } catch (err) {
+            window.pickemTheme.set(prev);
+            mark(prev);
+          }
+        });
+      });
     }
 
     // --- Notification toggles ---
@@ -184,7 +334,8 @@
       try {
         const { user } = await api.post('/api/auth/update', { current_pin, new_username, new_pin: new_pin || undefined });
         msg.innerHTML = '<div class="ok-msg">Saved. Your account has been updated.</div>';
-        document.getElementById('whoami').textContent = user.username;
+        me.username = user.username;
+        renderProfile();
         document.getElementById('currentPin').value = '';
         document.getElementById('newPin').value = '';
       } catch (err) {

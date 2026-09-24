@@ -40,6 +40,7 @@ const migrations = [
   { table: 'prop_picks', column: 'locked_in', ddl: 'ALTER TABLE prop_picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },
   { table: 'users', column: 'notify_slate', ddl: 'ALTER TABLE users ADD COLUMN notify_slate INTEGER NOT NULL DEFAULT 0' },
   { table: 'users', column: 'notify_kickoff', ddl: 'ALTER TABLE users ADD COLUMN notify_kickoff INTEGER NOT NULL DEFAULT 0' },
+  { table: 'users', column: 'theme', ddl: "ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark','light','system'))" },
 ];
 for (const m of migrations) {
   const cols = db.prepare(`PRAGMA table_info(${m.table})`).all();
