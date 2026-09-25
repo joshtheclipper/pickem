@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { fetchCurrentWeek } = require('../services/espn');
+const { fetchCurrentWeek, fetchScoreboard, fetchTeamSchedule } = require('../services/espn');
 
 const router = express.Router();
 
@@ -106,6 +106,90 @@ router.get('/:id/picks', requireAuth, (req, res) => {
     .all(req.params.id);
 
   res.json({ picks });
+});
+
+// Team schedules for the "View matchup" panel, cached per team the same
+// way as espnWeekCache above. Scores only change on game days, so a few
+// minutes of staleness is fine, and it keeps a whole league of players
+// opening panels from turning into a whole league of ESPN requests.
+const teamScheduleCache = new Map(); // `${league}:${teamId}:${year}` -> { at, data }
+const TEAM_SCHEDULE_TTL_OK = 10 * 60 * 1000;
+const TEAM_SCHEDULE_TTL_ERR = 3 * 60 * 1000;
+
+async function getTeamSchedule(league, teamId, year) {
+  const key = `${league}:${teamId}:${year}`;
+  const hit = teamScheduleCache.get(key);
+  if (hit) {
+    const ttl = hit.data == null ? TEAM_SCHEDULE_TTL_ERR : TEAM_SCHEDULE_TTL_OK;
+    if (Date.now() - hit.at < ttl) return hit.data;
+  }
+  let data = null;
+  try {
+    data = await fetchTeamSchedule(league, teamId, year);
+  } catch (err) {
+    console.error(`matchup: ESPN schedule lookup failed for ${key}:`, err.message);
+  }
+  teamScheduleCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
+// Games saved before home_team_id/away_team_id existed have neither. Look
+// the event back up on its week's scoreboard once and store them.
+async function ensureTeamIds(game) {
+  if (game.home_team_id && game.away_team_id) return game;
+  const events = await fetchScoreboard(game.league, game.week, game.season_year);
+  const ev = events.find((e) => e.espn_event_id === game.espn_event_id);
+  if (!ev || !ev.home_team_id || !ev.away_team_id) return game;
+  db.prepare('UPDATE games SET home_team_id = ?, away_team_id = ? WHERE id = ?').run(
+    ev.home_team_id,
+    ev.away_team_id,
+    game.id
+  );
+  return { ...game, home_team_id: ev.home_team_id, away_team_id: ev.away_team_id };
+}
+
+// Only games played before this one kicked off count, so an old week's
+// panel shows each team as it stood going into that game. The record is
+// rebuilt from that list; ESPN's standing text is "as of today", so it's
+// only passed along when nothing later has been cut off.
+function teamAsOf(schedule, kickoff) {
+  if (!schedule) return null;
+  const games = schedule.games.filter((g) => new Date(g.date) < kickoff);
+  const w = games.filter((g) => g.result === 'W').length;
+  const l = games.filter((g) => g.result === 'L').length;
+  const t = games.filter((g) => g.result === 'T').length;
+  return {
+    record: t ? `${w}-${l}-${t}` : `${w}-${l}`,
+    standing: games.length === schedule.games.length ? schedule.standing : null,
+    games,
+  };
+}
+
+// GET /api/games/:id/matchup - both teams' records and completed games so
+// far this season, for the "View matchup" panel on each game card.
+router.get('/:id/matchup', requireAuth, async (req, res) => {
+  let game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  try {
+    game = await ensureTeamIds(game);
+  } catch (err) {
+    console.error(`matchup: team id backfill failed for game ${game.id}:`, err.message);
+  }
+  if (!game.home_team_id || !game.away_team_id) {
+    return res.status(502).json({ error: 'Couldn’t load team records from ESPN. Try again in a few minutes.' });
+  }
+
+  const [awaySched, homeSched] = await Promise.all([
+    getTeamSchedule(game.league, game.away_team_id, game.season_year),
+    getTeamSchedule(game.league, game.home_team_id, game.season_year),
+  ]);
+  if (!awaySched || !homeSched) {
+    return res.status(502).json({ error: 'Couldn’t load team records from ESPN. Try again in a few minutes.' });
+  }
+
+  const kickoff = new Date(game.start_time);
+  res.json({ away: teamAsOf(awaySched, kickoff), home: teamAsOf(homeSched, kickoff) });
 });
 
 // GET /api/games/current-week?year=2026

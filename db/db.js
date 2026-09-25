@@ -35,6 +35,8 @@ const migrations = [
   { table: 'games', column: 'away_rank', ddl: 'ALTER TABLE games ADD COLUMN away_rank INTEGER' },
   { table: 'games', column: 'odds_summary', ddl: 'ALTER TABLE games ADD COLUMN odds_summary TEXT' },
   { table: 'games', column: 'status_detail', ddl: 'ALTER TABLE games ADD COLUMN status_detail TEXT' },
+  { table: 'games', column: 'home_team_id', ddl: 'ALTER TABLE games ADD COLUMN home_team_id TEXT' },
+  { table: 'games', column: 'away_team_id', ddl: 'ALTER TABLE games ADD COLUMN away_team_id TEXT' },
   { table: 'picks', column: 'locked_in', ddl: 'ALTER TABLE picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },
   { table: 'picks', column: 'admin_overridden', ddl: 'ALTER TABLE picks ADD COLUMN admin_overridden INTEGER NOT NULL DEFAULT 0' },
   { table: 'prop_picks', column: 'locked_in', ddl: 'ALTER TABLE prop_picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },

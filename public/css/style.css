@@ -356,6 +356,20 @@ a { color: var(--accent-text); }
 .game.game-final .team-btn.correct-pick.picked:disabled,
 .prop.graded .prop-btn.correct-pick.picked:disabled { box-shadow: none; border-color: var(--accent-border); color: var(--on-accent); }
 .team-btn img { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
+/* Top 25 rank sits in small type above the team name, so the name gets the
+   button's full width. index.html's fitTeamNames() shrinks a name that
+   still doesn't fit next to a score. */
+.team-btn .team-name { display: flex; flex-direction: column; min-width: 0; }
+.team-btn .team-name .rank-badge {
+  font-family: var(--font-body);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  margin-bottom: 1px;
+}
+.team-btn.picked .team-name .rank-badge { opacity: 0.75; }
+.team-btn .team-name .abbr { line-height: 1; }
 .team-btn .abbr {
   font-family: var(--font-display);
   font-weight: 700;
@@ -814,7 +828,11 @@ a { color: var(--accent-text); }
   .scorebar .brand { font-size: 1.6rem; }
   .scorebar nav a { padding: 8px 8px; }
 }
-@media (max-width: 360px) {
+/* Only the tiniest screens (320px, e.g. the original iPhone SE) shrink the
+   team logos: with a score showing there's no room for a readable name next
+   to a full-size logo. Every other phone keeps full-size logos and lets
+   fitTeamNames() in index.html shrink a long name instead. */
+@media (max-width: 340px) {
   .team-btn { gap: 6px; padding: 8px 8px; }
   .team-btn img { width: 24px; height: 24px; }
 }
@@ -913,4 +931,68 @@ a { color: var(--accent-text); }
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+.picks-reveal-footer-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+/* --- "View matchup" panel: both teams' records and results so far, in
+   two columns (away | home) matching the pick buttons above. --- */
+.matchup-btn { color: var(--accent-text); }
+.matchup-btn[aria-expanded="true"] { color: var(--text); }
+.matchup-panel {
+  margin-top: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.mu-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.mu-col { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mu-col + .mu-col { border-left: 1px solid var(--line); }
+.mu-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mu-head img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.mu-abbr { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu-side { margin-left: auto; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.mu-rec-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mu-rec { font-family: var(--font-display); font-weight: 700; font-size: 2.4rem; line-height: 0.9; font-variant-numeric: tabular-nums; }
+.spread-chip {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  padding: 4px 7px;
+  border-radius: 6px;
+  color: var(--dim);
+  border: 1px solid var(--line2);
+  font-variant-numeric: tabular-nums;
+}
+.spread-chip.fav { color: var(--accent-text); background: var(--accent-soft); border-color: transparent; }
+.mu-standing { font-size: 0.72rem; font-weight: 600; color: var(--dim); margin-top: 4px; }
+.mu-games { list-style: none; margin: 0; padding: 0; }
+.mu-games li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.mu-res {
+  display: inline-grid; place-items: center;
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.mu-res-W { background: var(--accent-soft); color: var(--up); }
+.mu-res-L { background: var(--red-soft); color: var(--down); }
+.mu-res-T { border: 1px solid var(--line2); color: var(--dim); }
+.mu-score { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.mu-opp { margin-left: auto; display: flex; align-items: center; gap: 5px; color: var(--dim); white-space: nowrap; }
+.mu-opp img { width: 18px; height: 18px; object-fit: contain; }
+.mu-none { padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.8rem; color: var(--faint); }
+@media (max-width: 380px) {
+  .mu-col { padding: 10px 8px; }
+  .mu-opp img { display: none; }
+  .mu-rec { font-size: 2rem; }
 }

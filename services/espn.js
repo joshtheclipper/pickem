@@ -157,9 +157,11 @@ function normalizeEvent(ev, league, seasonYear, week) {
     home_team: (home.team && home.team.displayName) || 'TBD',
     home_team_abbr: (home.team && home.team.abbreviation) || '',
     home_team_logo: home.team && home.team.logo,
+    home_team_id: (home.team && home.team.id) || null,
     away_team: (away.team && away.team.displayName) || 'TBD',
     away_team_abbr: (away.team && away.team.abbreviation) || '',
     away_team_logo: away.team && away.team.logo,
+    away_team_id: (away.team && away.team.id) || null,
     home_score: home.score !== undefined ? Number(home.score) : null,
     away_score: away.score !== undefined ? Number(away.score) : null,
     status,
@@ -173,4 +175,69 @@ function normalizeEvent(ev, league, seasonYear, week) {
   };
 }
 
-module.exports = { fetchScoreboard, fetchCurrentWeek, normalizeEvent };
+/**
+ * A team's full regular-season schedule, for the "View matchup" panel.
+ * Only completed games are returned. Note this feed's competitor.score is an
+ * object ({ value, displayValue }), unlike the scoreboard feed's plain value.
+ *
+ * Returns { record, standing, games: [{ date, week, home_away, opponent_abbr,
+ * opponent_logo, opponent_rank, team_score, opp_score, result }] } where
+ * record/standing are ESPN's *current* summaries ("2-0", "1st in AFC East").
+ */
+async function fetchTeamSchedule(league, teamId, year) {
+  const path = LEAGUE_PATHS[league];
+  if (!path) throw new Error(`Unknown league: ${league}`);
+
+  const params = new URLSearchParams({ season: String(year), seasontype: '2' });
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/teams/${encodeURIComponent(teamId)}/schedule?${params.toString()}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`ESPN API error (${res.status}) fetching schedule for team ${teamId}`);
+  }
+  const data = await res.json();
+  const team = data.team || {};
+  const scoreOf = (c) => {
+    const s = c && c.score;
+    if (s == null) return null;
+    const n = Number(typeof s === 'object' ? s.value : s);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const games = [];
+  for (const ev of data.events || []) {
+    const comp = ev.competitions && ev.competitions[0];
+    if (!comp || !(comp.status && comp.status.type && comp.status.type.completed)) continue;
+    const competitors = comp.competitors || [];
+    const us = competitors.find((c) => c.team && String(c.team.id) === String(teamId));
+    const them = competitors.find((c) => c !== us);
+    if (!us || !them) continue;
+
+    const teamScore = scoreOf(us);
+    const oppScore = scoreOf(them);
+    if (teamScore == null || oppScore == null) continue;
+
+    const oppRank = them.curatedRank && them.curatedRank.current;
+    const oppTeam = them.team || {};
+    games.push({
+      date: ev.date,
+      week: ev.week && ev.week.number ? Number(ev.week.number) : null,
+      home_away: us.homeAway === 'away' ? 'away' : 'home',
+      opponent_abbr: oppTeam.abbreviation || oppTeam.displayName || 'TBD',
+      opponent_logo: (oppTeam.logos && oppTeam.logos[0] && oppTeam.logos[0].href) || oppTeam.logo || null,
+      opponent_rank: oppRank && oppRank <= 25 ? oppRank : null,
+      team_score: teamScore,
+      opp_score: oppScore,
+      result: teamScore > oppScore ? 'W' : teamScore < oppScore ? 'L' : 'T',
+    });
+  }
+  games.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  return {
+    record: team.recordSummary || null,
+    standing: team.standingSummary || null,
+    games,
+  };
+}
+
+module.exports = { fetchScoreboard, fetchCurrentWeek, fetchTeamSchedule, normalizeEvent };

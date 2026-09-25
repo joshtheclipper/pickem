@@ -88,6 +88,11 @@ CREATE TABLE IF NOT EXISTS games (
   home_rank INTEGER, -- AP Top 25 rank (1-25), NULL if unranked
   away_rank INTEGER,
   odds_summary TEXT, -- e.g. "BUF -3.5, O/U 47.5" for display only, not used in grading
+  -- ESPN team ids, used to pull each team's season schedule for the
+  -- "View matchup" panel. NULL on rows saved before these existed; the
+  -- score sync (and the matchup route itself) fills them in.
+  home_team_id TEXT,
+  away_team_id TEXT,
   included INTEGER NOT NULL DEFAULT 1, -- admin-selected for the challenge
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(espn_event_id)

@@ -105,6 +105,16 @@
     let me = null; // the signed-in player, for highlighting their leaderboard row
     let currentGames = []; // last-loaded games for the visible league/week, used to drive the lock-in bar
     let currentProps = []; // last-loaded props for the visible league/week, used to drive the lock-in bar
+    // "View matchup" panels. The 30s live poll rebuilds every card, so which
+    // panels are open (and what they showed) lives out here, keyed by game
+    // id, and renderGame puts an open panel straight back without a refetch.
+    const openMatchups = new Set();
+    const matchupCache = new Map(); // game id -> { at, data }
+    const MATCHUP_CACHE_MS = 10 * 60 * 1000;
+    // For fitTeamNames(): smallest a team name shrinks to (~70% of the
+    // normal 1.45rem), and a reusable Range for measuring name text.
+    const TEAM_NAME_MIN_PX = 16;
+    const nameRange = document.createRange();
 
     const gamesList = document.getElementById('gamesList');
     const weekLabel = document.getElementById('weekLabel');
@@ -184,7 +194,11 @@
       document.getElementById('tabBoard').classList.toggle('active', which === 'board');
       // The lock-in bar is about the picks on screen, so it only shows there.
       if (which === 'board') document.getElementById('lockPicksBar').style.display = 'none';
-      else updateLockBar();
+      else {
+        updateLockBar();
+        // Names can't be measured while the view is hidden, so fit them now.
+        fitTeamNames(gamesList);
+      }
     }
 
     // League tabs (picks view)
@@ -225,10 +239,43 @@
         }
         gamesList.innerHTML = `<div class="section-label">Games · ${games.length}</div>`;
         games.forEach((g) => gamesList.appendChild(renderGame(g)));
+        fitTeamNames(gamesList);
       } catch (err) {
         if (!silent) gamesList.innerHTML = `<div class="error-msg">${err.message}</div>`;
       }
     }
+
+    // Once a score shows up next to a team name, longer names (WAKE, MICH)
+    // can run out of room on a phone and get cut off. Shrink just those
+    // names until they fit, down to a floor; every other name keeps the
+    // normal size. Measures the text itself, because scrollWidth rounds to
+    // whole pixels and misses names a fraction of a pixel too wide.
+    function nameOverflows(el) {
+      nameRange.selectNodeContents(el);
+      return nameRange.getBoundingClientRect().width > el.getBoundingClientRect().width + 0.01;
+    }
+    function fitTeamNames(scope) {
+      scope.querySelectorAll('.team-btn .abbr').forEach((el) => {
+        el.style.fontSize = '';
+        if (!nameOverflows(el)) return;
+        let px = parseFloat(getComputedStyle(el).fontSize);
+        px = Math.max(TEAM_NAME_MIN_PX, Math.floor(px * (el.clientWidth / el.scrollWidth) * 10) / 10);
+        el.style.fontSize = `${px}px`;
+        while (nameOverflows(el) && px > TEAM_NAME_MIN_PX) {
+          px = Math.max(TEAM_NAME_MIN_PX, px - 0.5);
+          el.style.fontSize = `${px}px`;
+        }
+      });
+    }
+    // Re-fit when the width changes (rotating the phone) and once the
+    // display font has loaded, since fallback-font measurements are off.
+    let fitNamesQueued = false;
+    window.addEventListener('resize', () => {
+      if (fitNamesQueued) return;
+      fitNamesQueued = true;
+      requestAnimationFrame(() => { fitNamesQueued = false; fitTeamNames(gamesList); });
+    });
+    if (document.fonts) document.fonts.ready.then(() => fitTeamNames(gamesList));
 
     // Poll for live score/quarter updates while the picks tab is visible.
     // Matches the cadence of the server's own ESPN sync, so there's no
@@ -490,22 +537,25 @@
         ? '<span class="admin-edited-badge" title="An admin set or corrected this pick">Admin-edited</span>'
         : '';
 
+      // ESPN reports 0-0 before kickoff; only show a score once there is one.
+      const showScores = g.status !== 'scheduled';
+
       div.innerHTML = `
         <div class="game-meta">
-          <span>${timeStr}${g.odds_summary ? ` &middot; ${g.odds_summary}` : ''}</span>
+          <span>${timeStr}</span>
           <span>${statusText}</span>
         </div>
         <div class="matchup">
           <button class="team-btn away-btn ${g.my_pick === 'away' ? 'picked' : ''}" ${(g.locked || g.my_pick_locked) ? 'disabled' : ''}>
             ${g.away_team_logo ? `<img src="${g.away_team_logo}" alt="">` : ''}
-            <span class="abbr">${g.away_rank ? `<span class="rank-badge">#${g.away_rank}</span> ` : ''}${g.away_team_abbr || g.away_team}</span>
-            ${g.away_score !== null ? `<span class="score">${g.away_score}</span>` : ''}
+            <span class="team-name">${g.away_rank ? `<span class="rank-badge">#${g.away_rank}</span>` : ''}<span class="abbr">${g.away_team_abbr || g.away_team}</span></span>
+            ${showScores && g.away_score !== null ? `<span class="score">${g.away_score}</span>` : ''}
           </button>
           <span class="at-sign">@</span>
           <button class="team-btn right-side home-btn ${g.my_pick === 'home' ? 'picked' : ''}" ${(g.locked || g.my_pick_locked) ? 'disabled' : ''}>
             ${g.home_team_logo ? `<img src="${g.home_team_logo}" alt="">` : ''}
-            <span class="abbr">${g.home_rank ? `<span class="rank-badge">#${g.home_rank}</span> ` : ''}${g.home_team_abbr || g.home_team}</span>
-            ${g.home_score !== null ? `<span class="score">${g.home_score}</span>` : ''}
+            <span class="team-name">${g.home_rank ? `<span class="rank-badge">#${g.home_rank}</span>` : ''}<span class="abbr">${g.home_team_abbr || g.home_team}</span></span>
+            ${showScores && g.home_score !== null ? `<span class="score">${g.home_score}</span>` : ''}
           </button>
         </div>
       `;
@@ -526,12 +576,50 @@
       revealWrap.className = 'picks-reveal-wrap';
       revealWrap.innerHTML = `
         <div class="picks-reveal-footer">
-          <button class="reveal-btn">Show picks ▾</button>
-          ${adminEditedBadge}
+          <div class="picks-reveal-footer-left">
+            <button class="reveal-btn">Show picks ▾</button>
+            ${adminEditedBadge}
+          </div>
+          <button class="reveal-btn matchup-btn" aria-expanded="false">View matchup ▾</button>
         </div>
         <div class="picks-reveal" style="display:none"></div>
+        <div class="matchup-panel" style="display:none"></div>
       `;
       div.appendChild(revealWrap);
+
+      const matchupBtn = revealWrap.querySelector('.matchup-btn');
+      const matchupPanel = revealWrap.querySelector('.matchup-panel');
+      const setMatchupOpen = (open) => {
+        matchupPanel.style.display = open ? '' : 'none';
+        matchupBtn.textContent = open ? 'Hide matchup ▴' : 'View matchup ▾';
+        matchupBtn.setAttribute('aria-expanded', String(open));
+        if (open) openMatchups.add(g.id); else openMatchups.delete(g.id);
+      };
+      const fillMatchup = async () => {
+        const hit = matchupCache.get(g.id);
+        if (hit && Date.now() - hit.at < MATCHUP_CACHE_MS) {
+          matchupPanel.innerHTML = matchupHtml(g, hit.data);
+          return;
+        }
+        if (!hit) matchupPanel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
+        try {
+          const data = await api.get(`/api/games/${g.id}/matchup`);
+          matchupCache.set(g.id, { at: Date.now(), data });
+          matchupPanel.innerHTML = matchupHtml(g, data);
+        } catch (err) {
+          // A stale copy beats an error; only show the error with nothing to fall back on.
+          if (!hit) matchupPanel.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+        }
+      };
+      matchupBtn.addEventListener('click', () => {
+        const open = matchupPanel.style.display === 'none';
+        setMatchupOpen(open);
+        if (open) fillMatchup();
+      });
+      if (openMatchups.has(g.id)) {
+        setMatchupOpen(true);
+        fillMatchup();
+      }
 
       const revealBtn = revealWrap.querySelector('.reveal-btn');
       const revealPanel = revealWrap.querySelector('.picks-reveal');
@@ -586,6 +674,59 @@
         homeBtn.addEventListener('click', () => makePick(g.id, 'home', div));
       }
       return div;
+    }
+
+    // "BUF -7 · O/U 50.5" -> { away: '+7', home: '-7' }. ESPN only names the
+    // favorite, so the underdog's number is the same line flipped. null when
+    // there's no line yet (or it names neither team).
+    function spreadsFor(g) {
+      const line = (g.odds_summary || '').split(' · ').find((part) => part && !part.startsWith('O/U'));
+      if (!line) return null;
+      if (/^(EVEN|PK|PICK)/i.test(line)) return { away: 'PK', home: 'PK' };
+      const m = line.match(/^(\S+)\s+([+-]?\d+(?:\.\d+)?)$/);
+      if (!m) return null;
+      const n = Number(m[2]);
+      if (n === 0) return { away: 'PK', home: 'PK' };
+      const fmt = (x) => (x > 0 ? `+${x}` : String(x));
+      if (m[1] === g.home_team_abbr) return { home: fmt(n), away: fmt(-n) };
+      if (m[1] === g.away_team_abbr) return { away: fmt(n), home: fmt(-n) };
+      return null;
+    }
+
+    // Side-by-side team columns for the "View matchup" panel: away on the
+    // left, home on the right, same order as the pick buttons above.
+    function matchupHtml(g, data) {
+      const spreads = spreadsFor(g);
+      const col = (side, t) => {
+        const abbr = side === 'home' ? (g.home_team_abbr || g.home_team) : (g.away_team_abbr || g.away_team);
+        const logo = side === 'home' ? g.home_team_logo : g.away_team_logo;
+        const spread = spreads && spreads[side];
+        const spreadChip = spread
+          ? `<span class="spread-chip${spread.startsWith('-') ? ' fav' : ''}" title="Point spread">${spread}</span>`
+          : '';
+        const rows = t.games.length
+          ? `<ul class="mu-games">${t.games.map((x) => `
+              <li>
+                <span class="mu-res mu-res-${x.result}">${x.result}</span>
+                <span class="mu-score">${x.team_score}-${x.opp_score}</span>
+                <span class="mu-opp">${x.home_away === 'away' ? '@' : 'vs'} ${x.opponent_rank ? `<span class="rank-badge">#${x.opponent_rank}</span> ` : ''}${escapeHtml(x.opponent_abbr)}${x.opponent_logo ? `<img src="${escapeHtml(x.opponent_logo)}" alt="" loading="lazy">` : ''}</span>
+              </li>`).join('')}</ul>`
+          : '<div class="mu-none">No games played yet</div>';
+        return `
+          <div class="mu-col">
+            <div class="mu-head">
+              ${logo ? `<img src="${logo}" alt="">` : ''}
+              <span class="mu-abbr">${escapeHtml(abbr)}</span>
+              <span class="mu-side">${side === 'home' ? 'Home' : 'Away'}</span>
+            </div>
+            <div>
+              <div class="mu-rec-row"><span class="mu-rec">${t.record}</span>${spreadChip}</div>
+              ${t.standing ? `<div class="mu-standing">${escapeHtml(t.standing)}</div>` : ''}
+            </div>
+            ${rows}
+          </div>`;
+      };
+      return `<div class="mu-cols">${col('away', data.away)}${col('home', data.home)}</div>`;
     }
 
     // Optimistically updates just the one game row instead of reloading the

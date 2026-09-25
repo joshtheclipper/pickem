@@ -48,12 +48,12 @@ router.post('/select-games', requireAdmin, (req, res) => {
       home_team, home_team_abbr, home_team_logo,
       away_team, away_team_abbr, away_team_logo,
       home_score, away_score, status, status_detail, winner,
-      home_rank, away_rank, odds_summary, included
+      home_rank, away_rank, odds_summary, home_team_id, away_team_id, included
     ) VALUES (@espn_event_id, @league, @season_year, @week, @start_time,
       @home_team, @home_team_abbr, @home_team_logo,
       @away_team, @away_team_abbr, @away_team_logo,
       @home_score, @away_score, @status, @status_detail, @winner,
-      @home_rank, @away_rank, @odds_summary, 1)
+      @home_rank, @away_rank, @odds_summary, @home_team_id, @away_team_id, 1)
     ON CONFLICT(espn_event_id) DO UPDATE SET
       start_time = excluded.start_time,
       home_score = excluded.home_score,
@@ -64,6 +64,8 @@ router.post('/select-games', requireAdmin, (req, res) => {
       home_rank = excluded.home_rank,
       away_rank = excluded.away_rank,
       odds_summary = excluded.odds_summary,
+      home_team_id = COALESCE(excluded.home_team_id, games.home_team_id),
+      away_team_id = COALESCE(excluded.away_team_id, games.away_team_id),
       included = 1
   `);
 
@@ -89,6 +91,8 @@ router.post('/select-games', requireAdmin, (req, res) => {
         home_rank: g.home_rank || null,
         away_rank: g.away_rank || null,
         odds_summary: g.odds_summary || null,
+        home_team_id: g.home_team_id || null,
+        away_team_id: g.away_team_id || null,
       });
     }
   });
