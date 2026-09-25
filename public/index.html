@@ -11,7 +11,7 @@
      every navigation between pages flashes white while that chain resolves. -->
 <script src="/js/theme.js"></script>
 <style>html{background:#0a0d10}html[data-theme=light]{background:#eef1f4}</style>
-<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/style.css?v=2026-09-24">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
@@ -709,13 +709,13 @@
               <li>
                 <span class="mu-res mu-res-${x.result}">${x.result}</span>
                 <span class="mu-score">${x.team_score}-${x.opp_score}</span>
-                <span class="mu-opp">${x.home_away === 'away' ? '@' : 'vs'} ${x.opponent_rank ? `<span class="rank-badge">#${x.opponent_rank}</span> ` : ''}${escapeHtml(x.opponent_abbr)}${x.opponent_logo ? `<img src="${escapeHtml(x.opponent_logo)}" alt="" loading="lazy">` : ''}</span>
+                <span class="mu-opp">${x.home_away === 'away' ? '@' : 'vs'} ${x.opponent_rank ? `<span class="rank-badge">#${x.opponent_rank}</span> ` : ''}${escapeHtml(x.opponent_abbr)}${x.opponent_logo ? `<img src="${escapeHtml(x.opponent_logo)}" alt="" width="18" height="18" loading="lazy">` : ''}</span>
               </li>`).join('')}</ul>`
           : '<div class="mu-none">No games played yet</div>';
         return `
           <div class="mu-col">
             <div class="mu-head">
-              ${logo ? `<img src="${logo}" alt="">` : ''}
+              ${logo ? `<img src="${logo}" alt="" width="26" height="26">` : ''}
               <span class="mu-abbr">${escapeHtml(abbr)}</span>
               <span class="mu-side">${side === 'home' ? 'Home' : 'Away'}</span>
             </div>
