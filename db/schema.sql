@@ -114,6 +114,10 @@ CREATE TABLE IF NOT EXISTS picks (
   -- the game hasn't started) — at that point it's genuinely their own
   -- choice again. See routes/picks.js and routes/admin.js.
   admin_overridden INTEGER NOT NULL DEFAULT 0,
+  -- When that override happened (UTC, datetime('now') format). Kept apart
+  -- from updated_at, which grading and lock-in also bump. NULL on overrides
+  -- made before this column existed; the UI shows "time not recorded".
+  admin_edited_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, game_id)
@@ -148,6 +152,10 @@ CREATE TABLE IF NOT EXISTS prop_picks (
   -- (see routes/games.js) — a player can't view everyone else's answer on a
   -- prop until they've committed their own, or the prop itself has locked.
   locked_in INTEGER NOT NULL DEFAULT 0,
+  -- Same admin override flag + timestamp as picks.admin_overridden /
+  -- picks.admin_edited_at, set from the Manage picks tab.
+  admin_overridden INTEGER NOT NULL DEFAULT 0,
+  admin_edited_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, prop_id)

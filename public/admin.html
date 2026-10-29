@@ -11,7 +11,7 @@
      every navigation between pages flashes white while that chain resolves. -->
 <script src="/js/theme.js"></script>
 <style>html{background:#0a0d10}html[data-theme=light]{background:#eef1f4}</style>
-<link rel="stylesheet" href="/css/style.css?v=2026-09-24">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-28">
 <link rel="stylesheet" href="/css/admin-improvements.css">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -86,10 +86,11 @@
     <div id="adminTabManage" class="admin-tab-panel" style="display:none">
       <div class="section-label" style="margin-top:20px">Manage picks — <span id="managePicksLabel">NFL Week 1</span></div>
       <div style="color:var(--chalk-dim);font-size:0.85rem;margin-bottom:14px">
-        Set or correct any player's pick on a saved game — including games that have already locked
-        or gone final. Editing a graded game re-grades that pick immediately.
+        Set or correct any player's pick on a saved game or prop — including ones that have already
+        locked or been graded. Editing a graded pick re-grades it immediately.
       </div>
       <div id="managePicksList"></div>
+      <div id="managePropPicksList"></div>
     </div>
 
     <div id="adminTabPlayers" class="admin-tab-panel" style="display:none">
@@ -113,7 +114,7 @@
     </div>
   </div>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2026-10-28"></script>
   <script>
     let league = 'NFL';
     let year = currentSeasonYear();
@@ -133,7 +134,7 @@
     let selectionBaseline = new Map(); // espn_event_id -> was it selected
 
     // Staged pick corrections from the Manage Picks panel — keyed by
-    // "gameId:userId" — held here until the admin explicitly saves them,
+    // "gameId:userId" for games and "prop:propId:userId" for props — held here until the admin explicitly saves them,
     // same "commit as a deliberate step" pattern as player lock-in.
     let pendingAdminEdits = new Map();
 
@@ -348,6 +349,9 @@
       list.innerHTML = '<div class="empty">Loading…</div>';
       try {
         const { props } = await api.get(`/api/admin/props?league=${league}&week=${week}&year=${year}`);
+        // Keep the Manage picks tab in step with added/edited/graded props,
+        // unless that would throw away prop edits the admin hasn't saved.
+        if (![...pendingAdminEdits.values()].some((e) => e.prop_id)) loadManagePropPicks();
         if (props.length === 0) {
           list.innerHTML = '<div class="empty">No prop questions yet for this week.</div>';
           return;
@@ -582,7 +586,11 @@
       btn.disabled = true;
       try {
         for (const e of edits) {
-          await api.post('/api/admin/picks/edit', { game_id: e.game_id, user_id: e.user_id, pick: e.pick });
+          if (e.prop_id) {
+            await api.post('/api/admin/prop-picks/edit', { prop_id: e.prop_id, user_id: e.user_id, answer: e.answer });
+          } else {
+            await api.post('/api/admin/picks/edit', { game_id: e.game_id, user_id: e.user_id, pick: e.pick });
+          }
         }
         pendingAdminEdits.clear();
         updateManageEditsBar();
@@ -599,6 +607,7 @@
 
     // --- Manage picks (admin can set/correct any player's pick, any time) ---
     async function loadManagePicks() {
+      loadManagePropPicks();
       const list = document.getElementById('managePicksList');
       list.innerHTML = '<div class="empty">Loading…</div>';
       try {
@@ -637,13 +646,19 @@
       `;
       wrap.appendChild(header);
 
+      attachManagePanel(wrap, header.querySelector('.manage-toggle-btn'), `/api/admin/games/${g.id}/picks`, (p) => renderManagePickRow(g, p));
+      return wrap;
+    }
+
+    // Collapsible per-game / per-prop player list. Rows are fetched the
+    // first time it's opened.
+    function attachManagePanel(wrap, toggleBtn, picksUrl, renderRow) {
       const panel = document.createElement('div');
       panel.className = 'manage-picks-panel';
       panel.style.display = 'none';
       wrap.appendChild(panel);
 
       let loaded = false;
-      const toggleBtn = header.querySelector('.manage-toggle-btn');
       toggleBtn.addEventListener('click', async () => {
         const isOpen = panel.style.display !== 'none';
         if (isOpen) {
@@ -656,20 +671,37 @@
         if (loaded) return;
         panel.innerHTML = '<div class="empty" style="padding:10px">Loading…</div>';
         try {
-          const { picks } = await api.get(`/api/admin/games/${g.id}/picks`);
+          const { picks } = await api.get(picksUrl);
           loaded = true;
           panel.innerHTML = '';
           if (picks.length === 0) {
             panel.innerHTML = '<div class="empty" style="padding:10px">No players yet.</div>';
             return;
           }
-          picks.forEach((p) => panel.appendChild(renderManagePickRow(g, p)));
+          picks.forEach((p) => panel.appendChild(renderRow(p)));
         } catch (err) {
           panel.innerHTML = `<div class="error-msg">${err.message}</div>`;
         }
       });
+    }
 
-      return wrap;
+    // Player name plus a ✎ mark (with the edit time) if an admin has
+    // already set/corrected this pick.
+    function manageRowLabel(p) {
+      const label = document.createElement('span');
+      label.textContent = p.username;
+      if (p.admin_overridden) {
+        const mark = document.createElement('span');
+        mark.className = 'admin-edited-mark';
+        mark.title = 'An admin previously set/corrected this pick';
+        mark.textContent = ' ✎';
+        const when = document.createElement('small');
+        const { when: whenText } = formatAdminEdit(p.admin_edited_at);
+        when.textContent = whenText;
+        mark.appendChild(when);
+        label.appendChild(mark);
+      }
+      return label;
     }
 
     function renderManagePickRow(g, p) {
@@ -678,16 +710,7 @@
       if (p.is_correct === 1) row.classList.add('pick-correct');
       if (p.is_correct === 0) row.classList.add('pick-incorrect');
 
-      const label = document.createElement('span');
-      label.textContent = p.username;
-      if (p.admin_overridden) {
-        const mark = document.createElement('span');
-        mark.className = 'admin-edited-mark';
-        mark.title = 'You previously set/corrected this pick';
-        mark.textContent = ' ✎';
-        label.appendChild(mark);
-      }
-      row.appendChild(label);
+      row.appendChild(manageRowLabel(p));
 
       const btnWrap = document.createElement('span');
       btnWrap.className = 'manage-pick-btns';
@@ -715,6 +738,83 @@
 
       btnWrap.appendChild(awayBtn);
       btnWrap.appendChild(homeBtn);
+      row.appendChild(btnWrap);
+      return row;
+    }
+
+    // --- Manage prop picks (same flow as games, YES/NO instead of teams) ---
+    async function loadManagePropPicks() {
+      const list = document.getElementById('managePropPicksList');
+      try {
+        const { props } = await api.get(`/api/admin/props?league=${league}&week=${week}&year=${year}`);
+        // Built off-DOM and swapped in at once: this can be called twice
+        // back to back (refreshAdminView), and appending in place would
+        // double the list.
+        const frag = document.createDocumentFragment();
+        if (props.length) {
+          const label = document.createElement('div');
+          label.className = 'section-label';
+          label.style.marginTop = '20px';
+          label.textContent = props.length === 1 ? 'Prop' : `Props · ${props.length}`;
+          frag.appendChild(label);
+        }
+        props.forEach((prop) => frag.appendChild(renderManagePropItem(prop)));
+        list.replaceChildren(frag);
+      } catch (err) {
+        list.innerHTML = `<div class="error-msg">${err.message}</div>`;
+      }
+    }
+
+    function renderManagePropItem(prop) {
+      const wrap = document.createElement('div');
+      wrap.className = 'admin-list-item manage-pick-game';
+
+      const statusTag = prop.status === 'closed'
+        ? ` · Graded ${prop.correct_answer.toUpperCase()}`
+        : (prop.locks_at && new Date(prop.locks_at) <= new Date() ? ' · Locked' : ' · Open');
+
+      const header = document.createElement('div');
+      header.className = 'manage-pick-header';
+      const q = document.createElement('span');
+      q.className = 'manage-pick-header-matchup';
+      q.textContent = prop.question;
+      const status = document.createElement('span');
+      status.style.cssText = 'color:var(--chalk-dim);font-size:0.78rem';
+      status.textContent = ` —${statusTag}`;
+      q.appendChild(status);
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'btn secondary manage-toggle-btn';
+      toggleBtn.style.width = 'auto';
+      toggleBtn.textContent = 'Manage picks ▾';
+      header.append(q, toggleBtn);
+      wrap.appendChild(header);
+
+      attachManagePanel(wrap, toggleBtn, `/api/admin/props/${prop.id}/picks`, (p) => renderManagePropRow(prop, p));
+      return wrap;
+    }
+
+    function renderManagePropRow(prop, p) {
+      const row = document.createElement('div');
+      row.className = 'manage-pick-row';
+      if (p.is_correct === 1) row.classList.add('pick-correct');
+      if (p.is_correct === 0) row.classList.add('pick-incorrect');
+      row.appendChild(manageRowLabel(p));
+
+      const btnWrap = document.createElement('span');
+      btnWrap.className = 'manage-pick-btns';
+      const btns = ['yes', 'no'].map((answer) => {
+        const b = document.createElement('button');
+        b.className = `manage-pick-btn ${p.answer === answer ? 'picked' : ''}`;
+        b.innerHTML = `<span>${answer.toUpperCase()}</span>`;
+        b.addEventListener('click', () => {
+          btns.forEach((x, i) => x.classList.toggle('picked', ['yes', 'no'][i] === answer));
+          row.classList.remove('pick-correct', 'pick-incorrect');
+          pendingAdminEdits.set(`prop:${prop.id}:${p.user_id}`, { prop_id: prop.id, user_id: p.user_id, answer });
+          updateManageEditsBar();
+        });
+        btnWrap.appendChild(b);
+        return b;
+      });
       row.appendChild(btnWrap);
       return row;
     }

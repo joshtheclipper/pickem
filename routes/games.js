@@ -50,7 +50,7 @@ router.get('/', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT game_id, pick, is_correct, locked_in, admin_overridden FROM picks WHERE user_id = ? AND game_id IN (${games.map(() => '?').join(',') || 'NULL'})`
+      `SELECT game_id, pick, is_correct, locked_in, admin_overridden, admin_edited_at FROM picks WHERE user_id = ? AND game_id IN (${games.map(() => '?').join(',') || 'NULL'})`
     )
     .all(req.user.id, ...games.map((g) => g.id));
 
@@ -64,6 +64,7 @@ router.get('/', requireAuth, (req, res) => {
     my_pick_correct: pickMap[g.id] ? pickMap[g.id].is_correct : null,
     my_pick_locked: pickMap[g.id] ? !!pickMap[g.id].locked_in : false,
     my_pick_admin_overridden: pickMap[g.id] ? !!pickMap[g.id].admin_overridden : false,
+    my_pick_admin_edited_at: pickMap[g.id] ? pickMap[g.id].admin_edited_at : null,
   }));
 
   res.json({ games: enriched });
@@ -97,7 +98,7 @@ router.get('/:id/picks', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT u.id AS user_id, u.username, a.updated_at AS avatar_v, p.pick, p.is_correct, p.admin_overridden
+      `SELECT u.id AS user_id, u.username, a.updated_at AS avatar_v, p.pick, p.is_correct, p.admin_overridden, p.admin_edited_at
        FROM picks p JOIN users u ON u.id = p.user_id
        LEFT JOIN user_avatars a ON a.user_id = u.id
        WHERE p.game_id = ?

@@ -11,7 +11,7 @@
      every navigation between pages flashes white while that chain resolves. -->
 <script src="/js/theme.js"></script>
 <style>html{background:#0a0d10}html[data-theme=light]{background:#eef1f4}</style>
-<link rel="stylesheet" href="/css/style.css?v=2026-09-24">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-28">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
@@ -87,7 +87,7 @@
     <button class="btn" id="lockPicksBtn">Lock in</button>
   </div>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=2026-10-28"></script>
   <script src="/js/installPrompt.js"></script>
   <script>
     let league = 'NFL';
@@ -348,7 +348,7 @@
     // shut every 30s while the player is reading it.
     function propsSignature(list) {
       return list
-        .map((p) => [p.id, p.question, p.status, p.correct_answer, p.locked, p.my_answer, p.my_answer_correct, p.my_answer_locked].join('~'))
+        .map((p) => [p.id, p.question, p.status, p.correct_answer, p.locked, p.my_answer, p.my_answer_correct, p.my_answer_locked, p.my_answer_admin_edited_at, p.my_answer_admin_overridden].join('~'))
         .join('|');
     }
 
@@ -430,6 +430,7 @@
       revealWrap.innerHTML = `
         <div class="picks-reveal-footer">
           <button class="reveal-btn">Show picks ▾</button>
+          ${p.my_answer_admin_overridden ? adminEditedBadgeHtml(p.my_answer_admin_edited_at) : ''}
         </div>
         <div class="picks-reveal" style="display:none"></div>
       `;
@@ -463,7 +464,8 @@
             rowEl.className = 'pick-row';
             if (row.is_correct === 1) rowEl.classList.add('pick-correct');
             if (row.is_correct === 0) rowEl.classList.add('pick-incorrect');
-            rowEl.innerHTML = `<span class="pick-row-who">${avatarHtml(row, 26)}<span>${escapeHtml(row.username)}</span></span><span class="pick-row-team">${row.answer.toUpperCase()}</span>`;
+            const adminMark = row.admin_overridden ? adminEditedBadgeHtml(row.admin_edited_at, true) + ' ' : '';
+            rowEl.innerHTML = `<span class="pick-row-who">${avatarHtml(row, 26)}<span>${escapeHtml(row.username)}</span></span><span class="pick-row-team">${adminMark}${row.answer.toUpperCase()}</span>`;
             revealPanel.appendChild(rowEl);
           });
         } catch (err) {
@@ -533,9 +535,7 @@
                   ? `<span class="lock pick-locked-badge">🔒 Pick locked</span>`
                   : `<span class="lock lock-open">Pick open</span>`));
 
-      const adminEditedBadge = g.my_pick_admin_overridden
-        ? '<span class="admin-edited-badge" title="An admin set or corrected this pick">Admin-edited</span>'
-        : '';
+      const adminEditedBadge = g.my_pick_admin_overridden ? adminEditedBadgeHtml(g.my_pick_admin_edited_at) : '';
 
       // ESPN reports 0-0 before kickoff; only show a score once there is one.
       const showScores = g.status !== 'scheduled';
@@ -650,9 +650,7 @@
             if (p.is_correct === 1) row.classList.add('pick-correct');
             if (p.is_correct === 0) row.classList.add('pick-incorrect');
             const teamLabel = p.pick === 'home' ? (g.home_team_abbr || g.home_team) : (g.away_team_abbr || g.away_team);
-            const adminMark = p.admin_overridden
-              ? '<span class="admin-edited-badge admin-edited-badge-inline">Admin-edited</span> '
-              : '';
+            const adminMark = p.admin_overridden ? adminEditedBadgeHtml(p.admin_edited_at, true) + ' ' : '';
             row.innerHTML = `<span class="pick-row-who">${avatarHtml(p, 26)}<span>${escapeHtml(p.username)}</span></span><span class="pick-row-team">${adminMark}${teamLabel}</span>`;
             revealPanel.appendChild(row);
           });

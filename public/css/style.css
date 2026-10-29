@@ -925,6 +925,66 @@ a { color: var(--accent-text); }
   font-size: 0.78rem;
   cursor: help;
 }
+.admin-edited-mark small {
+  color: var(--faint);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* Tapping the badge opens a small bubble with when the edit happened. It
+   uses the dark "bar" colors in both themes so it reads as an overlay. */
+button.admin-edited-badge {
+  border: 0;
+  font-family: var(--font-body);
+  line-height: inherit;
+  cursor: pointer;
+}
+button.admin-edited-badge:hover { filter: brightness(1.12); }
+button.admin-edited-badge:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.admin-edit-anchor { position: relative; display: inline-block; }
+.admin-edit-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bar);
+  color: var(--bar-text);
+  border: 1px solid var(--bar-line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  box-shadow: var(--shadow);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.admin-edit-pop[hidden] { display: none; }
+.admin-edit-pop::after {
+  content: "";
+  position: absolute;
+  right: 22px;
+  top: 100%;
+  border: 7px solid transparent;
+  border-top-color: var(--bar);
+}
+.pop-below .admin-edit-pop { bottom: auto; top: calc(100% + 10px); }
+.pop-below .admin-edit-pop::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--bar); }
+.admin-edit-pop-k {
+  color: var(--bar-dim);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.admin-edit-pop-when { font-weight: 800; font-variant-numeric: tabular-nums; }
+.admin-edit-pop-rel { color: var(--bar-dim); }
 
 .picks-reveal-footer {
   display: flex;
