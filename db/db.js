@@ -35,11 +35,17 @@ const migrations = [
   { table: 'games', column: 'away_rank', ddl: 'ALTER TABLE games ADD COLUMN away_rank INTEGER' },
   { table: 'games', column: 'odds_summary', ddl: 'ALTER TABLE games ADD COLUMN odds_summary TEXT' },
   { table: 'games', column: 'status_detail', ddl: 'ALTER TABLE games ADD COLUMN status_detail TEXT' },
+  { table: 'games', column: 'home_team_id', ddl: 'ALTER TABLE games ADD COLUMN home_team_id TEXT' },
+  { table: 'games', column: 'away_team_id', ddl: 'ALTER TABLE games ADD COLUMN away_team_id TEXT' },
   { table: 'picks', column: 'locked_in', ddl: 'ALTER TABLE picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },
   { table: 'picks', column: 'admin_overridden', ddl: 'ALTER TABLE picks ADD COLUMN admin_overridden INTEGER NOT NULL DEFAULT 0' },
   { table: 'prop_picks', column: 'locked_in', ddl: 'ALTER TABLE prop_picks ADD COLUMN locked_in INTEGER NOT NULL DEFAULT 0' },
+  { table: 'picks', column: 'admin_edited_at', ddl: 'ALTER TABLE picks ADD COLUMN admin_edited_at TEXT' },
+  { table: 'prop_picks', column: 'admin_overridden', ddl: 'ALTER TABLE prop_picks ADD COLUMN admin_overridden INTEGER NOT NULL DEFAULT 0' },
+  { table: 'prop_picks', column: 'admin_edited_at', ddl: 'ALTER TABLE prop_picks ADD COLUMN admin_edited_at TEXT' },
   { table: 'users', column: 'notify_slate', ddl: 'ALTER TABLE users ADD COLUMN notify_slate INTEGER NOT NULL DEFAULT 0' },
   { table: 'users', column: 'notify_kickoff', ddl: 'ALTER TABLE users ADD COLUMN notify_kickoff INTEGER NOT NULL DEFAULT 0' },
+  { table: 'users', column: 'theme', ddl: "ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark','light','system'))" },
 ];
 for (const m of migrations) {
   const cols = db.prepare(`PRAGMA table_info(${m.table})`).all();

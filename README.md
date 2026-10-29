@@ -30,6 +30,14 @@ account required beyond a place to host it.
   hour before kickoff listing any included games — and props with a lock time — the player still
   hasn't picked. Checked every 5 minutes by the same cron as score sync (`DISABLE_CRON` turns both
   off); each game/prop reminds a player at most once.
+- **Dark / light mode.** Players choose Dark (default), Light or System on the Account tab; it's
+  saved to their account, so it follows them to every device.
+- **Profile photos.** Players can add a photo on the Account tab. The browser crops it to a
+  256px square JPEG before upload, and the server caps uploads at 512 KB and stores them in the
+  SQLite database. Players without a photo show their initials.
+- **Leaderboard extras.** A top-3 podium, win–loss and accuracy per player, rank movement since
+  the latest graded week, hot (3+ right) and cold (3+ wrong) streaks, and the winner of the most
+  recently completed week.
 - **Zero external dependencies for game data.** Schedules, team logos, and live scores come from
   ESPN's public scoreboard API — the same feed espn.com's own site uses. No API key or account
   needed.

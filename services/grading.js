@@ -25,7 +25,8 @@ async function syncAndGrade() {
 
     const updateStmt = db.prepare(`
       UPDATE games SET home_score = ?, away_score = ?, status = ?, status_detail = ?, winner = ?,
-        home_rank = ?, away_rank = ?, odds_summary = ?
+        home_rank = ?, away_rank = ?, odds_summary = ?,
+        home_team_id = COALESCE(?, home_team_id), away_team_id = COALESCE(?, away_team_id)
       WHERE espn_event_id = ? AND league = ? AND season_year = ?
     `);
 
@@ -39,6 +40,8 @@ async function syncAndGrade() {
         ev.home_rank,
         ev.away_rank,
         ev.odds_summary,
+        ev.home_team_id,
+        ev.away_team_id,
         ev.espn_event_id,
         league,
         season_year

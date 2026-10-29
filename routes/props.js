@@ -19,7 +19,7 @@ router.get('/', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT prop_id, answer, is_correct, locked_in FROM prop_picks WHERE user_id = ? AND prop_id IN (${props.map(() => '?').join(',') || 'NULL'})`
+      `SELECT prop_id, answer, is_correct, locked_in, admin_overridden, admin_edited_at FROM prop_picks WHERE user_id = ? AND prop_id IN (${props.map(() => '?').join(',') || 'NULL'})`
     )
     .all(req.user.id, ...props.map((p) => p.id));
 
@@ -32,6 +32,8 @@ router.get('/', requireAuth, (req, res) => {
     my_answer: pickMap[p.id] ? pickMap[p.id].answer : null,
     my_answer_correct: pickMap[p.id] ? pickMap[p.id].is_correct : null,
     my_answer_locked: pickMap[p.id] ? !!pickMap[p.id].locked_in : false,
+    my_answer_admin_overridden: pickMap[p.id] ? !!pickMap[p.id].admin_overridden : false,
+    my_answer_admin_edited_at: pickMap[p.id] ? pickMap[p.id].admin_edited_at : null,
   }));
 
   res.json({ props: enriched });
@@ -60,7 +62,11 @@ router.post('/pick', requireAuth, (req, res) => {
   }
 
   if (existing) {
-    db.prepare("UPDATE prop_picks SET answer = ?, updated_at = datetime('now') WHERE id = ?").run(answer, existing.id);
+    // Changing an admin-set answer themselves makes it their own again,
+    // same as routes/picks.js.
+    db.prepare(
+      "UPDATE prop_picks SET answer = ?, admin_overridden = 0, admin_edited_at = NULL, updated_at = datetime('now') WHERE id = ?"
+    ).run(answer, existing.id);
   } else {
     db.prepare('INSERT INTO prop_picks (user_id, prop_id, answer) VALUES (?, ?, ?)').run(req.user.id, prop_id, answer);
   }
@@ -143,8 +149,9 @@ router.get('/:id/picks', requireAuth, (req, res) => {
 
   const picks = db
     .prepare(
-      `SELECT u.username, pp.answer, pp.is_correct
+      `SELECT u.id AS user_id, u.username, a.updated_at AS avatar_v, pp.answer, pp.is_correct, pp.admin_overridden, pp.admin_edited_at
        FROM prop_picks pp JOIN users u ON u.id = pp.user_id
+       LEFT JOIN user_avatars a ON a.user_id = u.id
        WHERE pp.prop_id = ?
        ORDER BY u.username ASC`
     )

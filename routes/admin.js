@@ -48,12 +48,12 @@ router.post('/select-games', requireAdmin, (req, res) => {
       home_team, home_team_abbr, home_team_logo,
       away_team, away_team_abbr, away_team_logo,
       home_score, away_score, status, status_detail, winner,
-      home_rank, away_rank, odds_summary, included
+      home_rank, away_rank, odds_summary, home_team_id, away_team_id, included
     ) VALUES (@espn_event_id, @league, @season_year, @week, @start_time,
       @home_team, @home_team_abbr, @home_team_logo,
       @away_team, @away_team_abbr, @away_team_logo,
       @home_score, @away_score, @status, @status_detail, @winner,
-      @home_rank, @away_rank, @odds_summary, 1)
+      @home_rank, @away_rank, @odds_summary, @home_team_id, @away_team_id, 1)
     ON CONFLICT(espn_event_id) DO UPDATE SET
       start_time = excluded.start_time,
       home_score = excluded.home_score,
@@ -64,6 +64,8 @@ router.post('/select-games', requireAdmin, (req, res) => {
       home_rank = excluded.home_rank,
       away_rank = excluded.away_rank,
       odds_summary = excluded.odds_summary,
+      home_team_id = COALESCE(excluded.home_team_id, games.home_team_id),
+      away_team_id = COALESCE(excluded.away_team_id, games.away_team_id),
       included = 1
   `);
 
@@ -89,6 +91,8 @@ router.post('/select-games', requireAdmin, (req, res) => {
         home_rank: g.home_rank || null,
         away_rank: g.away_rank || null,
         odds_summary: g.odds_summary || null,
+        home_team_id: g.home_team_id || null,
+        away_team_id: g.away_team_id || null,
       });
     }
   });
@@ -140,7 +144,7 @@ router.get('/games/:id/picks', requireAdmin, (req, res) => {
 
   const rows = db
     .prepare(
-      `SELECT u.id AS user_id, u.username, p.pick, p.is_correct, p.admin_overridden
+      `SELECT u.id AS user_id, u.username, p.pick, p.is_correct, p.admin_overridden, p.admin_edited_at
        FROM users u
        LEFT JOIN picks p ON p.user_id = u.id AND p.game_id = ?
        ORDER BY u.username ASC`
@@ -175,18 +179,73 @@ router.post('/picks/edit', requireAdmin, (req, res) => {
 
   const existing = db.prepare('SELECT id FROM picks WHERE user_id = ? AND game_id = ?').get(user_id, game_id);
   if (existing) {
-    db.prepare("UPDATE picks SET pick = ?, is_correct = ?, admin_overridden = 1, updated_at = datetime('now') WHERE id = ?").run(
+    db.prepare(
+      "UPDATE picks SET pick = ?, is_correct = ?, admin_overridden = 1, admin_edited_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+    ).run(
       pick,
       isCorrect,
       existing.id
     );
   } else {
-    db.prepare('INSERT INTO picks (user_id, game_id, pick, is_correct, admin_overridden) VALUES (?, ?, ?, ?, 1)').run(
+    db.prepare(
+      "INSERT INTO picks (user_id, game_id, pick, is_correct, admin_overridden, admin_edited_at) VALUES (?, ?, ?, ?, 1, datetime('now'))"
+    ).run(
       user_id,
       game_id,
       pick,
       isCorrect
     );
+  }
+
+  res.json({ ok: true, is_correct: isCorrect });
+});
+
+// GET /api/admin/props/:id/picks - every player's answer on a single prop
+// (or null if they haven't answered), regardless of lock status. Prop
+// counterpart of GET /games/:id/picks for the Manage picks tab.
+router.get('/props/:id/picks', requireAdmin, (req, res) => {
+  const prop = db.prepare('SELECT * FROM props WHERE id = ?').get(req.params.id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const rows = db
+    .prepare(
+      `SELECT u.id AS user_id, u.username, pp.answer, pp.is_correct, pp.admin_overridden, pp.admin_edited_at
+       FROM users u
+       LEFT JOIN prop_picks pp ON pp.user_id = u.id AND pp.prop_id = ?
+       ORDER BY u.username ASC`
+    )
+    .all(req.params.id);
+
+  res.json({ prop, picks: rows });
+});
+
+// POST /api/admin/prop-picks/edit  { prop_id, user_id, answer: 'yes'|'no' }
+// Admin override for a prop answer, same rules as /picks/edit: works
+// whether or not the prop has locked, and an already-graded prop re-grades
+// the edited answer on the spot.
+router.post('/prop-picks/edit', requireAdmin, (req, res) => {
+  const { prop_id, user_id, answer } = req.body || {};
+  if (!prop_id || !user_id || !['yes', 'no'].includes(answer)) {
+    return res.status(400).json({ error: "prop_id, user_id, and answer ('yes'|'no') are required" });
+  }
+
+  const prop = db.prepare('SELECT * FROM props WHERE id = ?').get(prop_id);
+  if (!prop) return res.status(404).json({ error: 'Prop not found' });
+
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(user_id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const isCorrect = prop.status === 'closed' && prop.correct_answer ? (answer === prop.correct_answer ? 1 : 0) : null;
+
+  const existing = db.prepare('SELECT id FROM prop_picks WHERE user_id = ? AND prop_id = ?').get(user_id, prop_id);
+  if (existing) {
+    db.prepare(
+      "UPDATE prop_picks SET answer = ?, is_correct = ?, admin_overridden = 1, admin_edited_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+    ).run(answer, isCorrect, existing.id);
+  } else {
+    db.prepare(
+      "INSERT INTO prop_picks (user_id, prop_id, answer, is_correct, admin_overridden, admin_edited_at) VALUES (?, ?, ?, ?, 1, datetime('now'))"
+    ).run(user_id, prop_id, answer, isCorrect);
   }
 
   res.json({ ok: true, is_correct: isCorrect });

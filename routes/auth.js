@@ -64,8 +64,28 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Reads from the DB rather than echoing the JWT, so settings that change
+// without a re-login (theme, profile photo) are always current.
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
+  const row = db
+    .prepare(
+      `SELECT u.id, u.username, u.is_admin, u.theme, a.updated_at AS avatar_v
+       FROM users u LEFT JOIN user_avatars a ON a.user_id = u.id
+       WHERE u.id = ?`
+    )
+    .get(req.user.id);
+  if (!row) return res.status(401).json({ error: 'Account no longer exists' });
+  res.json({ user: { ...row, is_admin: !!row.is_admin } });
+});
+
+// POST /api/auth/theme  { theme: 'dark' | 'light' | 'system' }
+router.post('/theme', requireAuth, (req, res) => {
+  const { theme } = req.body || {};
+  if (!['dark', 'light', 'system'].includes(theme)) {
+    return res.status(400).json({ error: 'Theme must be dark, light or system' });
+  }
+  db.prepare('UPDATE users SET theme = ? WHERE id = ?').run(theme, req.user.id);
+  res.json({ ok: true, theme });
 });
 
 // POST /api/auth/update  { current_pin, new_username?, new_pin? }

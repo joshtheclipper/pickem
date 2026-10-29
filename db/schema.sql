@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   -- locks) if this player still hasn't picked it. Separate from
   -- notify_slate; both share the push_subscriptions rows below.
   notify_kickoff INTEGER NOT NULL DEFAULT 0,
+  -- UI color mode chosen on the Account page: 'dark' | 'light' | 'system'.
+  -- Stored on the account so it follows the player to every device.
+  theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('dark','light','system')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -29,6 +32,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id);
+
+-- Profile photos. The browser crops/shrinks the image to a small square
+-- JPEG before upload (see public/account.html), so rows stay tiny; the
+-- server still caps the upload size in routes/avatars.js. updated_at (ms)
+-- doubles as the cache-busting version in avatar URLs.
+CREATE TABLE IF NOT EXISTS user_avatars (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 
 -- Dedup guard so re-saving a slate (or adding a second prop) doesn't fire a
 -- second round of notifications for the same league/week/kind.
@@ -74,6 +88,11 @@ CREATE TABLE IF NOT EXISTS games (
   home_rank INTEGER, -- AP Top 25 rank (1-25), NULL if unranked
   away_rank INTEGER,
   odds_summary TEXT, -- e.g. "BUF -3.5, O/U 47.5" for display only, not used in grading
+  -- ESPN team ids, used to pull each team's season schedule for the
+  -- "View matchup" panel. NULL on rows saved before these existed; the
+  -- score sync (and the matchup route itself) fills them in.
+  home_team_id TEXT,
+  away_team_id TEXT,
   included INTEGER NOT NULL DEFAULT 1, -- admin-selected for the challenge
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(espn_event_id)
@@ -95,6 +114,10 @@ CREATE TABLE IF NOT EXISTS picks (
   -- the game hasn't started) — at that point it's genuinely their own
   -- choice again. See routes/picks.js and routes/admin.js.
   admin_overridden INTEGER NOT NULL DEFAULT 0,
+  -- When that override happened (UTC, datetime('now') format). Kept apart
+  -- from updated_at, which grading and lock-in also bump. NULL on overrides
+  -- made before this column existed; the UI shows "time not recorded".
+  admin_edited_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, game_id)
@@ -129,6 +152,10 @@ CREATE TABLE IF NOT EXISTS prop_picks (
   -- (see routes/games.js) — a player can't view everyone else's answer on a
   -- prop until they've committed their own, or the prop itself has locked.
   locked_in INTEGER NOT NULL DEFAULT 0,
+  -- Same admin override flag + timestamp as picks.admin_overridden /
+  -- picks.admin_edited_at, set from the Manage picks tab.
+  admin_overridden INTEGER NOT NULL DEFAULT 0,
+  admin_edited_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, prop_id)
